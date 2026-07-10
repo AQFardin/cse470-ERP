@@ -1,0 +1,123 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+// ─── Enums ──────────────────────────────────────────────
+
+enum Role {
+  MANAGER
+  EMPLOYEE
+}
+
+enum EmployeeStatus {
+  ACTIVE
+  ON_LEAVE
+  INACTIVE
+}
+
+enum Department {
+  ENGINEERING
+  HR
+  FINANCE
+  MARKETING
+  SALES
+  OPERATIONS
+}
+
+enum LeaveType {
+  SICK
+  VACATION
+  PERSONAL
+  OTHER
+}
+
+enum LeaveStatus {
+  PENDING
+  APPROVED
+  DENIED
+}
+
+enum TaskPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum TaskStatus {
+  TODO
+  IN_PROGRESS
+  COMPLETED
+  OVERDUE
+}
+
+// ─── Models ─────────────────────────────────────────────
+
+model Employee {
+  id          String         @id @default(uuid())
+  employeeId  String         @unique @map("employee_id")
+  firstName   String         @map("first_name")
+  lastName    String         @map("last_name")
+  email       String         @unique
+  phoneNumber String?        @map("phone_number")
+  department  Department
+  position    String
+  role        Role           @default(EMPLOYEE)
+  hireDate    DateTime       @map("hire_date")
+  status      EmployeeStatus @default(ACTIVE)
+  address     String?
+  avatarUrl   String?        @map("avatar_url")
+  createdAt   DateTime       @default(now()) @map("created_at")
+  updatedAt   DateTime       @updatedAt @map("updated_at")
+
+  // Relations
+  leaveRequests  LeaveRequest[]   @relation("EmployeeLeaves")
+  reviewedLeaves LeaveRequest[]   @relation("ReviewerLeaves")
+  assignedTasks  TaskAssignment[] @relation("AssignedTasks")
+  createdTasks   TaskAssignment[] @relation("CreatedTasks")
+
+  @@map("employees")
+}
+
+model LeaveRequest {
+  id           String      @id @default(uuid())
+  employeeId   String      @map("employee_id")
+  type         LeaveType
+  startDate    DateTime    @map("start_date")
+  endDate      DateTime    @map("end_date")
+  reason       String
+  status       LeaveStatus @default(PENDING)
+  reviewedById String?     @map("reviewed_by_id")
+  reviewedAt   DateTime?   @map("reviewed_at")
+  createdAt    DateTime    @default(now()) @map("created_at")
+
+  // Relations
+  employee   Employee  @relation("EmployeeLeaves", fields: [employeeId], references: [id])
+  reviewedBy Employee? @relation("ReviewerLeaves", fields: [reviewedById], references: [id])
+
+  @@map("leave_requests")
+}
+
+model TaskAssignment {
+  id           String       @id @default(uuid())
+  title        String
+  description  String?
+  assignedToId String       @map("assigned_to_id")
+  assignedById String       @map("assigned_by_id")
+  priority     TaskPriority @default(MEDIUM)
+  status       TaskStatus   @default(TODO)
+  deadline     DateTime
+  createdAt    DateTime     @default(now()) @map("created_at")
+  updatedAt    DateTime     @updatedAt @map("updated_at")
+
+  // Relations
+  assignedTo Employee @relation("AssignedTasks", fields: [assignedToId], references: [id])
+  assignedBy Employee @relation("CreatedTasks", fields: [assignedById], references: [id])
+
+  @@map("task_assignments")
+}
