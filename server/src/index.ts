@@ -3,6 +3,10 @@ import cors from 'cors';
 import employeeRoutes from './routes/employees';
 import leaveRequestRoutes from './routes/leaveRequests';
 import taskRoutes from './routes/tasks';
+import jobPostingRoutes from '../modules/recruitment/routes/jobPosting.routes';
+import applicantRoutes from '../modules/recruitment/routes/applicant.routes';
+import applicationRoutes from '../modules/recruitment/routes/application.routes';
+import path from 'path';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -23,7 +27,10 @@ app.get('/api/health', (_req, res) => {
 app.use('/api/employees', employeeRoutes);
 app.use('/api/leave-requests', leaveRequestRoutes);
 app.use('/api/tasks', taskRoutes);
-
+app.use('/api/job-postings', jobPostingRoutes);
+app.use('/api/applicants', applicantRoutes);
+app.use('/api/applications', applicationRoutes);
+app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 // ─── Start Server ───────────────────────────────────────
 app.listen(PORT, () => {
   console.log(`\n🚀 ERP Server running on http://localhost:${PORT}`);
