@@ -28,7 +28,7 @@ type SortField = 'id' | 'name' | 'departmentId' | 'status' | 'joiningDate';
 type SortOrder = 'asc' | 'desc';
 
 export default function EmployeeListView({ onNavigate, searchQuery }: EmployeeListViewProps) {
-  const { employees, departments, currentUserRole } = useApp();
+  const { employees, departments, hasPermission } = useApp();
   
   // Tab control: 'all' or departmentId
   const [activeTab, setActiveTab] = useState<string>('all');
@@ -165,7 +165,7 @@ export default function EmployeeListView({ onNavigate, searchQuery }: EmployeeLi
           </p>
         </div>
 
-        {currentUserRole === 'manager' && (
+        {hasPermission('employee_records', 'create') && (
           <button
             onClick={() => onNavigate('/employees/new')}
             className="flex items-center gap-1.5 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-semibold shadow-xs hover:shadow-md transition-all cursor-pointer scale-100 active:scale-[0.98] self-start md:self-auto"

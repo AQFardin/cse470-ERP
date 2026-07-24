@@ -27,7 +27,7 @@ export async function submitApplication(req: Request, res: Response) {
     const resumeUrl = `/uploads/resumes/${req.file.filename}`;
 
     // Find or create the applicant (same person may apply to multiple roles)
-    let applicant = await prisma.applicant.findUnique({ where: { email } });
+    let applicant = await prisma.applicant.findFirst({ where: { email } });
     if (!applicant) {
       applicant = await prisma.applicant.create({
         data: { name, email, phone, resumeUrl, coverLetter },

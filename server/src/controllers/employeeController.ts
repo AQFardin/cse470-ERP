@@ -1,6 +1,8 @@
 import { Request, Response } from 'express';
 import { prisma } from '../lib/prisma';
-import { Department, EmployeeStatus, Role } from '@prisma/client';
+import { Department, EmployeeStatus, Role, SystemRole } from '@prisma/client';
+import { logAudit } from '../lib/auditLog';
+import { userHasPermission } from '../middleware/authorize';
 
 // ─── CREATE Employee ────────────────────────────────────
 export async function createEmployee(req: Request, res: Response) {
@@ -16,6 +18,8 @@ export async function createEmployee(req: Request, res: Response) {
       hireDate,
       address,
       avatarUrl,
+      reportingManagerId,
+      systemRole,
     } = req.body;
 
     // Generate next employee ID
@@ -44,8 +48,39 @@ export async function createEmployee(req: Request, res: Response) {
         hireDate: new Date(hireDate),
         address,
         avatarUrl,
+        reportingManagerId: reportingManagerId || null,
       },
     });
+
+    await logAudit({
+      actorId: req.currentUser!.id,
+      action: 'CREATE',
+      targetEntity: 'Employee',
+      targetId: employee.id,
+      after: employee,
+    });
+
+    // Automatically create a corresponding User for the Employee
+    if (systemRole) {
+      const user = await prisma.user.create({
+        data: {
+          employeeId: employee.id,
+          name: `${firstName} ${lastName}`,
+          email,
+          passwordHash: '$2b$10$EpRnTzVlqHNP0.fUbXUwSOyuiCR/PeRoIGL5JZ9As3Z5Y.V3iE0r2', // dummy 'password'
+        },
+      });
+
+      // Assign Roles
+      const roleAssignments = [{ userId: user.id, role: SystemRole.EMPLOYEE }];
+      
+      // If a specific system role is assigned, give them that too
+      if (systemRole !== 'EMPLOYEE' && Object.values(SystemRole).includes(systemRole)) {
+        roleAssignments.push({ userId: user.id, role: systemRole as SystemRole });
+      }
+      
+      await prisma.userRole.createMany({ data: roleAssignments });
+    }
 
     res.status(201).json({ success: true, data: employee });
   } catch (error: any) {
@@ -61,10 +96,12 @@ export async function createEmployee(req: Request, res: Response) {
   }
 }
 
-// ─── GET ALL Employees ──────────────────────────────────
+// ─── GET ALL Employees (role-scoped) ────────────────────
 export async function getAllEmployees(req: Request, res: Response) {
   try {
     const { status, department, search, role } = req.query;
+    const userRoles = req.currentUser!.roles;
+    const employeeId = req.currentUser!.employeeId;
 
     const where: any = {};
 
@@ -79,11 +116,34 @@ export async function getAllEmployees(req: Request, res: Response) {
     }
     if (search) {
       where.OR = [
-        { firstName: { contains: search as string, mode: 'insensitive' } },
-        { lastName: { contains: search as string, mode: 'insensitive' } },
-        { email: { contains: search as string, mode: 'insensitive' } },
-        { employeeId: { contains: search as string, mode: 'insensitive' } },
+        { firstName: { contains: search as string } },
+        { lastName: { contains: search as string } },
+        { email: { contains: search as string } },
+        { employeeId: { contains: search as string } },
       ];
+    }
+
+    // Role-based scoping
+    const canViewAll = await userHasPermission(userRoles, 'employee_records', 'view_all');
+    const canViewTeam = await userHasPermission(userRoles, 'employee_records', 'view_team');
+
+    if (canViewAll) {
+      // No additional scoping — see everyone
+    } else if (canViewTeam && employeeId) {
+      // Manager: see own record + team in their department
+      const currentEmp = await prisma.employee.findUnique({ where: { id: employeeId } });
+      if (currentEmp) {
+        where.OR = [
+          { department: currentEmp.department },
+          { reportingManagerId: employeeId },
+          { id: employeeId },
+        ];
+      } else {
+        where.id = employeeId;
+      }
+    } else if (employeeId) {
+      // Employee: own record only
+      where.id = employeeId;
     }
 
     const employees = await prisma.employee.findMany({
@@ -95,6 +155,9 @@ export async function getAllEmployees(req: Request, res: Response) {
             assignedTasks: true,
             leaveRequests: true,
           },
+        },
+        reportingManager: {
+          select: { id: true, firstName: true, lastName: true, employeeId: true },
         },
       },
     });
@@ -109,7 +172,7 @@ export async function getAllEmployees(req: Request, res: Response) {
 // ─── GET Single Employee ────────────────────────────────
 export async function getEmployee(req: Request, res: Response) {
   try {
-    const { id } = req.params;
+    const id = req.params.id as string;
 
     const employee = await prisma.employee.findUnique({
       where: { id },
@@ -127,6 +190,12 @@ export async function getEmployee(req: Request, res: Response) {
             assignedTasks: true,
             leaveRequests: true,
           },
+        },
+        reportingManager: {
+          select: { id: true, firstName: true, lastName: true, employeeId: true },
+        },
+        directReports: {
+          select: { id: true, firstName: true, lastName: true, employeeId: true, department: true, position: true, status: true },
         },
       },
     });
@@ -146,7 +215,7 @@ export async function getEmployee(req: Request, res: Response) {
 // ─── UPDATE Employee ────────────────────────────────────
 export async function updateEmployee(req: Request, res: Response) {
   try {
-    const { id } = req.params;
+    const id = req.params.id as string;
     const {
       firstName,
       lastName,
@@ -156,7 +225,10 @@ export async function updateEmployee(req: Request, res: Response) {
       position,
       address,
       avatarUrl,
+      reportingManagerId,
     } = req.body;
+
+    const before = await prisma.employee.findUnique({ where: { id } });
 
     const employee = await prisma.employee.update({
       where: { id },
@@ -169,7 +241,17 @@ export async function updateEmployee(req: Request, res: Response) {
         ...(position && { position }),
         ...(address !== undefined && { address }),
         ...(avatarUrl !== undefined && { avatarUrl }),
+        ...(reportingManagerId !== undefined && { reportingManagerId }),
       },
+    });
+
+    await logAudit({
+      actorId: req.currentUser!.id,
+      action: 'UPDATE',
+      targetEntity: 'Employee',
+      targetId: id,
+      before,
+      after: employee,
     });
 
     res.json({ success: true, data: employee });
@@ -193,7 +275,7 @@ export async function updateEmployee(req: Request, res: Response) {
 // ─── TOGGLE Employee Status (Deactivate/Reactivate) ────
 export async function toggleEmployeeStatus(req: Request, res: Response) {
   try {
-    const { id } = req.params;
+    const id = req.params.id as string;
     const { status } = req.body;
 
     if (!status || !Object.values(EmployeeStatus).includes(status)) {
@@ -204,9 +286,20 @@ export async function toggleEmployeeStatus(req: Request, res: Response) {
       return;
     }
 
+    const before = await prisma.employee.findUnique({ where: { id } });
+
     const employee = await prisma.employee.update({
       where: { id },
       data: { status: status as EmployeeStatus },
+    });
+
+    await logAudit({
+      actorId: req.currentUser!.id,
+      action: 'UPDATE',
+      targetEntity: 'Employee',
+      targetId: id,
+      before,
+      after: employee,
     });
 
     res.json({ success: true, data: employee });

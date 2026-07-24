@@ -13,6 +13,12 @@ import EmployeeDetailView from './components/EmployeeDetailView';
 import AddEmployeeView from './components/AddEmployeeView';
 import LeaveRequestsView from './components/LeaveRequestsView';
 import TasksView from './components/TasksView';
+import AuditLogView from './components/AuditLogView';
+import OffboardingView from './components/OffboardingView';
+import LeaveBalanceView from './components/LeaveBalanceView';
+import AttendanceView from './components/AttendanceView';
+import HelpDeskView from './components/HelpDeskView';
+import ProjectView from './components/ProjectView';
 
 function AppContent() {
   const { path, navigate, params } = useSimpleRouter();
@@ -40,6 +46,18 @@ function AppContent() {
         return <LeaveRequestsView />;
       case '/tasks':
         return <TasksView />;
+      case '/audit-logs':
+        return <AuditLogView />;
+      case '/offboarding':
+        return <OffboardingView />;
+      case '/leave-balances':
+        return <LeaveBalanceView />;
+      case '/attendance':
+        return <AttendanceView />;
+      case '/help-desk':
+        return <HelpDeskView />;
+      case '/projects':
+        return <ProjectView />;
       default:
         // Handle employee detail route (/employees/:id)
         if (path.startsWith('/employees/') && params.id) {

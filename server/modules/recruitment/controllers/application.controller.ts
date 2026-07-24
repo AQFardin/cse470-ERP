@@ -1,10 +1,9 @@
 import { Request, Response } from 'express';
-import { prisma } from '../../../src/lib/prisma';;
+import { prisma } from '../../../src/lib/prisma';
 import { ApplicationStatus } from '@prisma/client';
 import { sendStatusChangeEmail } from '../services/email.service';
 
-// ─── GET All Applications (HR — the "candidate database") ──
-// Supports filtering by role (job posting) and by status
+// ─── GET All Applications (HR — candidate database) ────────
 export async function getAllApplications(req: Request, res: Response) {
   try {
     const { jobPostingId, status, search } = req.query;
@@ -15,8 +14,8 @@ export async function getAllApplications(req: Request, res: Response) {
     if (search) {
       where.applicant = {
         OR: [
-          { name: { contains: search as string, mode: 'insensitive' } },
-          { email: { contains: search as string, mode: 'insensitive' } },
+          { name: { contains: search as string } },
+          { email: { contains: search as string } },
         ],
       };
     }
@@ -34,10 +33,10 @@ export async function getAllApplications(req: Request, res: Response) {
   }
 }
 
-// ─── GET Single Application (with full status history) ──
+// ─── GET Single Application ─────────────────────────────
 export async function getApplication(req: Request, res: Response) {
   try {
-    const { id } = req.params;
+    const id = req.params.id as string;
     const application = await prisma.application.findUnique({
       where: { id },
       include: {
@@ -59,10 +58,10 @@ export async function getApplication(req: Request, res: Response) {
   }
 }
 
-// ─── UPDATE Application Status (HR — moves candidate through the pipeline) ──
+// ─── UPDATE Application Status ──────────────────────────
 export async function updateApplicationStatus(req: Request, res: Response) {
   try {
-    const { id } = req.params;
+    const id = req.params.id as string;
     const { status, changedById } = req.body;
 
     if (!status || !Object.values(ApplicationStatus).includes(status)) {
@@ -87,6 +86,7 @@ export async function updateApplicationStatus(req: Request, res: Response) {
       prisma.application.update({
         where: { id },
         data: { status: status as ApplicationStatus },
+        include: { applicant: true, jobPosting: true },
       }),
       prisma.applicationStatusHistory.create({
         data: {

@@ -16,6 +16,7 @@ export default function AddEmployeeView({ onNavigate }: AddEmployeeViewProps) {
   const [phone, setPhone] = useState('');
   const [address, setAddress] = useState('');
   const [role, setRole] = useState('');
+  const [systemRole, setSystemRole] = useState('EMPLOYEE');
   const [departmentId, setDepartmentId] = useState(departments[0]?.id || 'finance');
   const [salary, setSalary] = useState(85000);
   const [joiningDate, setJoiningDate] = useState(new Date().toISOString().split('T')[0]);
@@ -45,6 +46,7 @@ export default function AddEmployeeView({ onNavigate }: AddEmployeeViewProps) {
       phone: phone.trim(),
       address: address.trim(),
       role: role.trim(),
+      systemRole,
       departmentId,
       salary,
       joiningDate,
@@ -196,6 +198,25 @@ export default function AddEmployeeView({ onNavigate }: AddEmployeeViewProps) {
                 <ShieldAlert className="w-3 h-3" /> {errors.role}
               </p>
             )}
+          </div>
+
+          {/* System Role (RBAC) */}
+          <div className="space-y-1.5">
+            <label className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider block">System Access Level</label>
+            <select
+              value={systemRole}
+              onChange={(e) => setSystemRole(e.target.value)}
+              className="w-full px-4 py-2.5 bg-gray-50/50 border border-gray-200 rounded-xl text-xs focus:outline-hidden focus:ring-1 focus:ring-indigo-500 cursor-pointer"
+            >
+              <option value="EMPLOYEE">Employee (Base)</option>
+              <option value="MANAGER">Department Manager</option>
+              <option value="PROJECT_MANAGER">Project Manager</option>
+              <option value="ADMIN">System Administrator</option>
+              <option value="HR">HR Manager</option>
+              <option value="SALES">Sales Representative</option>
+              <option value="SUPPORT">Support Agent</option>
+              <option value="VENDOR">Vendor/Contractor</option>
+            </select>
           </div>
 
           {/* Department Selection */}

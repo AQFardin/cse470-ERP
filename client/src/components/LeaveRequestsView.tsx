@@ -6,53 +6,58 @@ import {
   XCircle, 
   Clock, 
   Filter, 
-  Sparkles, 
-  ShieldAlert, 
   User, 
-  Trash2,
   Lock,
   ChevronDown,
-  X
+  X,
+  ShieldCheck,
+  Building
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import type { LeaveRequest } from '../types';
 import { motion, AnimatePresence } from 'motion/react';
 
+const LEAVE_TYPES = [
+  { value: 'VACATION', label: 'Vacation Leave' },
+  { value: 'SICK', label: 'Sick Leave' },
+  { value: 'PERSONAL', label: 'Personal Leave' },
+  { value: 'MATERNITY', label: 'Maternity Leave (Routes to HR)' },
+  { value: 'UNPAID', label: 'Unpaid Leave (Routes to HR)' },
+  { value: 'EXTENDED', label: 'Extended Leave (Routes to HR)' },
+  { value: 'LEGAL', label: 'Legal Leave (Routes to HR)' },
+  { value: 'OTHER', label: 'Other Leave' },
+];
+
 export default function LeaveRequestsView() {
   const { 
-    currentUserRole, 
     leaveRequests, 
     addLeaveRequest, 
     updateLeaveRequestStatus, 
     employees, 
-    currentEmployeeId 
+    currentEmployeeId,
+    hasPermission
   } = useApp();
 
-  const me = employees.find(e => e.id === currentEmployeeId);
+  const canApprove = hasPermission('leave', 'approve');
 
   // Modal / form visibility state
   const [isFormOpen, setIsFormOpen] = useState(false);
 
-  // Form states (employee only)
+  // Form states
+  const [leaveType, setLeaveType] = useState('VACATION');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [reason, setReason] = useState('');
   const [formError, setFormError] = useState('');
 
-  // Status Filter state (manager only)
+  // Status Filter state
   const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'approved' | 'denied'>('all');
 
-  // Filtered requests based on view and filters
   const processedRequests = useMemo(() => {
-    if (currentUserRole === 'manager') {
-      return leaveRequests.filter(req => {
-        return statusFilter === 'all' || req.status === statusFilter;
-      });
-    } else {
-      // Employee view gets only their own requests
-      return leaveRequests.filter(req => req.employeeId === currentEmployeeId);
-    }
-  }, [leaveRequests, currentUserRole, statusFilter, currentEmployeeId]);
+    return leaveRequests.filter(req => {
+      return statusFilter === 'all' || req.status === statusFilter;
+    });
+  }, [leaveRequests, statusFilter]);
 
   const handleSubmitRequest = (e: React.FormEvent) => {
     e.preventDefault();
@@ -71,23 +76,21 @@ export default function LeaveRequestsView() {
       return;
     }
 
-    // Submit leave request
     addLeaveRequest({
       employeeId: currentEmployeeId,
-      type: 'OTHER',
+      type: leaveType,
       startDate,
       endDate,
       reason: reason.trim()
     });
 
-    // Reset Form
     setStartDate('');
     setEndDate('');
     setReason('');
+    setLeaveType('VACATION');
     setIsFormOpen(false);
   };
 
-  // Badge render helpers
   const renderStatusBadge = (status: LeaveRequest['status']) => {
     switch (status) {
       case 'approved':
@@ -98,14 +101,14 @@ export default function LeaveRequestsView() {
         );
       case 'denied':
         return (
-          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 text-[11px] font-semibold text-rose-500 bg-rose-50 border border-rose-200 rounded-lg">
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 text-[11px] font-semibold text-rose-600 bg-rose-50 border border-rose-200 rounded-lg">
             <span className="w-1.5 h-1.5 rounded-full bg-rose-500" /> Denied
           </span>
         );
       case 'pending':
         return (
-          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 text-[11px] font-semibold text-amber-600 bg-amber-50 border border-amber-200 rounded-lg">
-            <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" /> Pending
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 text-[11px] font-semibold text-amber-600 bg-amber-50 border border-amber-200 rounded-lg animate-pulse">
+            <span className="w-1.5 h-1.5 rounded-full bg-amber-500" /> Pending Review
           </span>
         );
       default:
@@ -114,252 +117,199 @@ export default function LeaveRequestsView() {
   };
 
   return (
-    <div className="p-6 md:p-8 space-y-6 bg-gray-50/40 min-h-full relative">
-      {/* Title block */}
+    <div className="p-6 md:p-8 space-y-6 bg-gray-50/40 min-h-full">
+      {/* Title Header */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div>
           <h1 className="text-2xl font-display font-bold text-gray-900 tracking-tight">Leave Requests</h1>
           <p className="text-xs text-gray-500 mt-1">
-            {currentUserRole === 'manager' 
-              ? 'Oversee workplace bandwidth, manage team availability schedules, and review time-off requests.' 
-              : 'Submit and track your paid and unpaid leave schedule records.'}
+            Dynamic approval routing engine: Employee → Manager → Admin (or HR for special leaves).
           </p>
         </div>
 
-        {/* Action Button */}
-        {currentUserRole === 'employee' && (
-          <button
-            onClick={() => setIsFormOpen(true)}
-            className="flex items-center gap-1.5 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-semibold shadow-xs hover:shadow-md transition-all cursor-pointer scale-100 active:scale-[0.98] self-start md:self-auto"
-          >
-            <Plus className="w-4 h-4" /> Request Leave
-          </button>
-        )}
+        <button
+          onClick={() => setIsFormOpen(true)}
+          className="inline-flex items-center gap-2 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white rounded-xl font-medium text-xs shadow-md shadow-indigo-600/20 transition-all cursor-pointer shrink-0 self-start md:self-auto"
+        >
+          <Plus className="w-4 h-4" />
+          Request Leave
+        </button>
       </div>
 
-      {/* Filter and stats navigation bar */}
-      {currentUserRole === 'manager' ? (
-        <div className="border-b border-gray-200 flex items-center justify-between gap-4 overflow-x-auto select-none no-scrollbar pb-px">
-          <div className="flex gap-2 min-w-max">
-            {(['all', 'pending', 'approved', 'denied'] as const).map((filter) => (
-              <button
-                key={filter}
-                onClick={() => setStatusFilter(filter)}
-                className={`px-4 py-3 text-xs font-semibold border-b-2 transition-all cursor-pointer capitalize ${
-                  statusFilter === filter 
-                    ? 'border-indigo-600 text-indigo-600 font-bold' 
-                    : 'border-transparent text-gray-400 hover:text-gray-600'
-                }`}
-              >
-                {filter === 'all' ? 'All Requests' : `${filter} Requests`}
-              </button>
-            ))}
-          </div>
-          <div className="text-[11px] text-gray-400 font-medium hidden sm:block">
-            Showing {processedRequests.length} of {leaveRequests.length} logs
-          </div>
+      {/* Filter Bar */}
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 bg-white p-3 rounded-2xl border border-gray-200/80 shadow-xs">
+        <div className="flex items-center gap-1 p-1 bg-gray-100/70 border border-gray-200/50 rounded-xl overflow-x-auto">
+          {(['all', 'pending', 'approved', 'denied'] as const).map((tab) => (
+            <button
+              key={tab}
+              onClick={() => setStatusFilter(tab)}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold capitalize transition-all cursor-pointer whitespace-nowrap ${
+                statusFilter === tab 
+                  ? 'bg-white text-indigo-600 shadow-xs' 
+                  : 'text-gray-500 hover:text-gray-900'
+              }`}
+            >
+              {tab === 'all' ? 'All Requests' : tab}
+            </button>
+          ))}
         </div>
-      ) : (
-        <div className="bg-indigo-50/60 border border-indigo-100/50 p-4 rounded-xl flex items-center gap-3 text-xs text-indigo-800">
-          <span className="w-2 h-2 rounded-full bg-indigo-500 shrink-0" />
-          <span>Need to submit a vacation, medical leave, or personal time off? Click the <strong>"Request Leave"</strong> action button.</span>
-        </div>
-      )}
+        <span className="text-xs font-mono text-gray-400 px-2">Total: {processedRequests.length} records</span>
+      </div>
 
-      {/* Table grid of records */}
-      <div className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-xs">
+      {/* Leave Request List */}
+      <div className="space-y-4">
         {processedRequests.length === 0 ? (
-          <div className="p-16 text-center flex flex-col items-center justify-center">
-            <div className="w-12 h-12 bg-gray-50 text-gray-400 rounded-full flex items-center justify-center mb-3">
-              <CalendarRange className="w-6 h-6" />
-            </div>
-            <span className="text-sm font-bold text-gray-800">No leave requests found</span>
-            <span className="text-xs text-gray-400 mt-1">There are currently no records listed under this view.</span>
+          <div className="p-12 text-center bg-white rounded-2xl border border-gray-200/80 space-y-2">
+            <CalendarRange className="w-8 h-8 text-gray-300 mx-auto" />
+            <p className="text-xs text-gray-500 font-medium">No leave requests found matching filter.</p>
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse text-xs">
-              <thead>
-                <tr className="bg-gray-50/70 border-b border-gray-200 select-none text-gray-400 font-bold uppercase tracking-wider">
-                  {currentUserRole === 'manager' && <th className="py-3 px-6 font-bold">Employee</th>}
-                  <th className="py-3 px-6 font-bold">Time-off Dates</th>
-                  <th className="py-3 px-6 font-bold">Reason</th>
-                  <th className="py-3 px-6 font-bold">Submitted Date</th>
-                  <th className="py-3 px-6 font-bold">Status</th>
-                  {currentUserRole === 'manager' && <th className="py-3 px-6 text-right font-bold">Actions</th>}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100 font-medium">
-                {processedRequests.map((req) => (
-                  <tr key={req.id} className="hover:bg-gray-50/40 transition-all">
-                    {/* Employee name (manager only) */}
-                    {currentUserRole === 'manager' && (
-                      <td className="py-4 px-6">
-                        <div className="flex flex-col">
-                          <span className="font-bold text-gray-900 text-sm">{req.employeeName}</span>
-                          <span className="text-[10px] text-gray-400 font-mono uppercase tracking-wider mt-0.5">{req.employeeId}</span>
-                        </div>
-                      </td>
-                    )}
+          processedRequests.map((req) => (
+            <div
+              key={req.id}
+              className="bg-white border border-gray-200/80 rounded-2xl p-5 shadow-xs hover:border-gray-300 transition-all flex flex-col md:flex-row md:items-center justify-between gap-4"
+            >
+              <div className="space-y-2">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-full bg-indigo-50 border border-indigo-100 text-indigo-600 font-bold flex items-center justify-center text-xs shrink-0">
+                    {req.employeeName ? req.employeeName[0] : 'U'}
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-bold text-gray-900">{req.employeeName}</h3>
+                    <div className="flex items-center gap-2 mt-0.5">
+                      <span className="px-2 py-0.5 rounded-md text-[10px] font-bold uppercase bg-gray-100 text-gray-600 font-mono">
+                        {req.type}
+                      </span>
+                      {req.approverName && (
+                        <span className="text-[10px] text-indigo-600 font-medium flex items-center gap-1">
+                          <ShieldCheck className="w-3 h-3" /> Approver: {req.approverName}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
 
-                    {/* Dates */}
-                    <td className="py-4 px-6 text-gray-700 font-bold font-mono">
-                      {req.startDate} <span className="text-gray-400 font-sans font-normal mx-1">to</span> {req.endDate}
-                    </td>
+                <div className="text-xs text-gray-600 font-medium pl-11 space-y-1">
+                  <p className="text-gray-700">"{req.reason}"</p>
+                  <p className="text-[11px] font-mono text-gray-400">
+                    Dates: {req.startDate} → {req.endDate} • Requested on: {req.requestDate}
+                  </p>
+                </div>
+              </div>
 
-                    {/* Reason */}
-                    <td className="py-4 px-6 text-gray-500 max-w-sm font-normal">
-                      {req.reason}
-                    </td>
+              <div className="flex flex-row md:flex-col items-end justify-between md:justify-center gap-3 shrink-0 pt-3 md:pt-0 border-t md:border-t-0 border-gray-100">
+                {renderStatusBadge(req.status)}
 
-                    {/* Submission Date */}
-                    <td className="py-4 px-6 text-gray-400 font-mono">
-                      {req.requestDate}
-                    </td>
-
-                    {/* Status Badge */}
-                    <td className="py-4 px-6">
-                      {renderStatusBadge(req.status)}
-                    </td>
-
-                    {/* Approve/Deny Actions (manager only) */}
-                    {currentUserRole === 'manager' && (
-                      <td className="py-4 px-6 text-right">
-                        {req.status === 'pending' ? (
-                          <div className="flex items-center justify-end gap-1.5 select-none">
-                            <button
-                              onClick={() => updateLeaveRequestStatus(req.id, 'approved')}
-                              className="px-2.5 py-1.5 border border-emerald-200 text-emerald-600 bg-emerald-50/50 hover:bg-emerald-50 rounded-lg text-[11px] font-bold transition-all cursor-pointer flex items-center gap-1"
-                            >
-                              <CheckCircle className="w-3.5 h-3.5" /> Approve
-                            </button>
-                            <button
-                              onClick={() => updateLeaveRequestStatus(req.id, 'denied')}
-                              className="px-2.5 py-1.5 border border-rose-200 text-rose-500 bg-rose-50/50 hover:bg-rose-50 rounded-lg text-[11px] font-bold transition-all cursor-pointer flex items-center gap-1"
-                            >
-                              <XCircle className="w-3.5 h-3.5" /> Deny
-                            </button>
-                          </div>
-                        ) : (
-                          <span className="text-[10px] font-mono text-gray-400 uppercase tracking-wider">Resolved</span>
-                        )}
-                      </td>
-                    )}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                {canApprove && req.status === 'pending' && (
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => updateLeaveRequestStatus(req.id, 'approved')}
+                      className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold rounded-xl transition-colors cursor-pointer flex items-center gap-1 shadow-xs"
+                    >
+                      <CheckCircle className="w-3.5 h-3.5" /> Approve
+                    </button>
+                    <button
+                      onClick={() => updateLeaveRequestStatus(req.id, 'denied')}
+                      className="px-3 py-1.5 bg-gray-100 hover:bg-rose-50 hover:text-rose-600 text-gray-700 text-xs font-semibold rounded-xl transition-colors cursor-pointer flex items-center gap-1"
+                    >
+                      <XCircle className="w-3.5 h-3.5" /> Deny
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+          ))
         )}
       </div>
 
-      {/* Slide-over Panel for Creating a New Request (Employee Only) */}
-      <AnimatePresence>
-        {isFormOpen && (
-          <>
-            {/* Backdrop */}
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 0.6 }}
-              exit={{ opacity: 0 }}
-              onClick={() => setIsFormOpen(false)}
-              className="fixed inset-0 bg-black z-40 backdrop-blur-xs"
-            />
+      {/* Modal for Creating Leave Request */}
+      {isFormOpen && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-2xl p-6 w-full max-w-md space-y-4 shadow-2xl border border-gray-100">
+            <div className="flex items-center justify-between">
+              <h2 className="text-base font-bold text-gray-900 flex items-center gap-2">
+                <CalendarRange className="w-5 h-5 text-indigo-600" />
+                Submit Leave Request
+              </h2>
+              <button onClick={() => setIsFormOpen(false)} className="text-gray-400 hover:text-gray-600 cursor-pointer">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
 
-            {/* Slide-over panel */}
-            <motion.div
-              initial={{ x: '100%' }}
-              animate={{ x: 0 }}
-              exit={{ x: '100%' }}
-              transition={{ type: 'spring', damping: 25, stiffness: 220 }}
-              className="fixed inset-y-0 right-0 w-full max-w-md bg-white border-l border-gray-200 shadow-2xl z-50 flex flex-col"
-            >
-              <div className="p-6 border-b border-gray-100 flex items-center justify-between">
-                <div>
-                  <span className="text-[10px] font-bold text-indigo-600 uppercase font-mono tracking-wider flex items-center gap-1">
-                    <Sparkles className="w-3 h-3" /> System Dispatch
-                  </span>
-                  <h2 className="text-lg font-display font-bold text-gray-900 mt-0.5">Submit Leave Request</h2>
-                </div>
-                <button
-                  onClick={() => setIsFormOpen(false)}
-                  className="p-1.5 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors cursor-pointer"
+            {formError && (
+              <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-600">
+                {formError}
+              </div>
+            )}
+
+            <form onSubmit={handleSubmitRequest} className="space-y-4 text-xs">
+              <div>
+                <label className="block font-semibold text-gray-700 mb-1">Leave Type *</label>
+                <select
+                  value={leaveType}
+                  onChange={(e) => setLeaveType(e.target.value)}
+                  className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs focus:ring-1 focus:ring-indigo-500 cursor-pointer"
                 >
-                  <X className="w-5 h-5" />
-                </button>
+                  {LEAVE_TYPES.map((t) => (
+                    <option key={t.value} value={t.value}>{t.label}</option>
+                  ))}
+                </select>
               </div>
 
-              {/* Form Content */}
-              <form onSubmit={handleSubmitRequest} className="flex-1 overflow-y-auto p-6 space-y-5 text-xs">
-                {formError && (
-                  <div className="p-3 bg-rose-50 border border-rose-200 text-rose-600 rounded-xl flex items-center gap-2">
-                    <ShieldAlert className="w-4 h-4 shrink-0" />
-                    <span>{formError}</span>
-                  </div>
-                )}
-
-                {/* Info Card */}
-                <div className="p-4 bg-gray-50 border border-gray-200 rounded-xl space-y-1">
-                  <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Requestor Details</span>
-                  <p className="font-bold text-gray-800">{me ? me.name : 'Financial Analyst'}</p>
-                  <p className="text-[10px] text-gray-400 font-mono">{me ? me.id : 'EMP001'} &bull; {me ? me.role : 'Analyst'}</p>
-                </div>
-
-                {/* Start Date */}
-                <div className="space-y-1.5">
-                  <label className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider block">Leave Start Date</label>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-semibold text-gray-700 mb-1">Start Date *</label>
                   <input
                     type="date"
                     value={startDate}
                     onChange={(e) => setStartDate(e.target.value)}
-                    className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs focus:outline-hidden focus:ring-1 focus:ring-indigo-500"
+                    className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs focus:ring-1 focus:ring-indigo-500"
+                    required
                   />
                 </div>
-
-                {/* End Date */}
-                <div className="space-y-1.5">
-                  <label className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider block">Leave End Date</label>
+                <div>
+                  <label className="block font-semibold text-gray-700 mb-1">End Date *</label>
                   <input
                     type="date"
                     value={endDate}
                     onChange={(e) => setEndDate(e.target.value)}
-                    className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs focus:outline-hidden focus:ring-1 focus:ring-indigo-500"
+                    className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs focus:ring-1 focus:ring-indigo-500"
+                    required
                   />
                 </div>
+              </div>
 
-                {/* Reason */}
-                <div className="space-y-1.5">
-                  <label className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider block">Reason for absence</label>
-                  <textarea
-                    value={reason}
-                    onChange={(e) => setReason(e.target.value)}
-                    rows={4}
-                    placeholder="Describe why you need time off (e.g. medical procedure, family trip, moving houses)..."
-                    className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs focus:outline-hidden focus:ring-1 focus:ring-indigo-500 resize-none"
-                  />
-                </div>
+              <div>
+                <label className="block font-semibold text-gray-700 mb-1">Reason *</label>
+                <textarea
+                  value={reason}
+                  onChange={(e) => setReason(e.target.value)}
+                  placeholder="State the reason for your leave request..."
+                  rows={3}
+                  className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs focus:ring-1 focus:ring-indigo-500"
+                  required
+                />
+              </div>
 
-                {/* Footer Buttons */}
-                <div className="pt-6 border-t border-gray-100 flex items-center gap-3">
-                  <button
-                    type="button"
-                    onClick={() => setIsFormOpen(false)}
-                    className="flex-1 py-2.5 border border-gray-200 hover:bg-gray-50 rounded-xl text-xs font-semibold text-gray-500 transition-colors cursor-pointer text-center"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    className="flex-1 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-semibold shadow-xs hover:shadow-md transition-all cursor-pointer text-center"
-                  >
-                    Submit Request
-                  </button>
-                </div>
-              </form>
-            </motion.div>
-          </>
-        )}
-      </AnimatePresence>
+              <div className="flex items-center gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setIsFormOpen(false)}
+                  className="flex-1 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold rounded-xl transition-colors cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="flex-1 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white font-semibold rounded-xl transition-colors cursor-pointer shadow-md"
+                >
+                  Submit Request
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -15,6 +15,17 @@ enum Role {
   EMPLOYEE
 }
 
+enum SystemRole {
+  ADMIN
+  PROJECT_MANAGER
+  MANAGER
+  HR
+  SALES
+  SUPPORT
+  EMPLOYEE
+  VENDOR
+}
+
 enum EmployeeStatus {
   ACTIVE
   ON_LEAVE
@@ -34,6 +45,10 @@ enum LeaveType {
   SICK
   VACATION
   PERSONAL
+  MATERNITY
+  UNPAID
+  EXTENDED
+  LEGAL
   OTHER
 }
 
@@ -57,32 +72,164 @@ enum TaskStatus {
   OVERDUE
 }
 
-// ─── Models ─────────────────────────────────────────────
+enum AuditAction {
+  CREATE
+  UPDATE
+  DELETE
+}
+
+enum OffboardStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  COMPLETED
+}
+
+enum AttendanceStatus {
+  PRESENT
+  ABSENT
+  HALF_DAY
+  REMOTE
+}
+
+enum TicketCategory {
+  INTERNAL_IT
+  MANAGER_ASSIST
+  CUSTOMER_SUPPORT
+}
+
+enum TicketStatus {
+  OPEN
+  IN_PROGRESS
+  RESOLVED
+  CLOSED
+}
+
+enum TicketPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum ProjectStatus {
+  PLANNING
+  ACTIVE
+  ON_HOLD
+  COMPLETED
+}
+
+// ─── RBAC Models ────────────────────────────────────────
+
+model User {
+  id           String     @id @default(uuid())
+  email        String     @unique
+  name         String
+  passwordHash String     @default("") @map("password_hash")
+  employeeId   String?    @unique @map("employee_id")
+  isActive     Boolean    @default(true) @map("is_active")
+  createdAt    DateTime   @default(now()) @map("created_at")
+
+  // Relations
+  employee        Employee?  @relation(fields: [employeeId], references: [id])
+  roles           UserRole[]
+  auditLogs       AuditLog[]
+  raisedTickets   Ticket[]   @relation("RaisedTickets")
+  assignedTickets Ticket[]   @relation("AssignedTickets")
+  createdProjects Project[]
+
+  @@map("users")
+}
+
+model Permission {
+  id     String @id @default(uuid())
+  module String
+  action String
+
+  // Relations
+  rolePermissions RolePermission[]
+
+  @@unique([module, action])
+  @@map("permissions")
+}
+
+model RolePermission {
+  id           String     @id @default(uuid())
+  role         SystemRole
+  permissionId String     @map("permission_id")
+
+  // Relations
+  permission   Permission @relation(fields: [permissionId], references: [id])
+
+  @@unique([role, permissionId])
+  @@map("role_permissions")
+}
+
+model UserRole {
+  id     String     @id @default(uuid())
+  userId String     @map("user_id")
+  role   SystemRole
+
+  // Relations
+  user   User       @relation(fields: [userId], references: [id])
+
+  @@unique([userId, role])
+  @@map("user_roles")
+}
+
+model AuditLog {
+  id             String      @id @default(uuid())
+  actorId        String      @map("actor_id")
+  action         AuditAction
+  targetEntity   String      @map("target_entity")
+  targetId       String      @map("target_id")
+  beforeSnapshot String?     @map("before_snapshot") // JSON string
+  afterSnapshot  String?     @map("after_snapshot")  // JSON string
+  timestamp      DateTime    @default(now())
+
+  // Relations
+  actor          User        @relation(fields: [actorId], references: [id])
+
+  @@map("audit_logs")
+}
+
+// ─── Core Models ────────────────────────────────────────
 
 model Employee {
-  id          String         @id @default(uuid())
-  employeeId  String         @unique @map("employee_id")
-  firstName   String         @map("first_name")
-  lastName    String         @map("last_name")
-  email       String         @unique
-  phoneNumber String?        @map("phone_number")
-  department  Department
-  position    String
-  role        Role           @default(EMPLOYEE)
-  hireDate    DateTime       @map("hire_date")
-  status      EmployeeStatus @default(ACTIVE)
-  address     String?
-  avatarUrl   String?        @map("avatar_url")
-  createdAt   DateTime       @default(now()) @map("created_at")
-  updatedAt   DateTime       @updatedAt @map("updated_at")
+  id                  String         @id @default(uuid())
+  employeeId          String         @unique @map("employee_id")
+  firstName           String         @map("first_name")
+  lastName            String         @map("last_name")
+  email               String         @unique
+  phoneNumber         String?        @map("phone_number")
+  department          Department
+  position            String
+  role                Role           @default(EMPLOYEE)
+  hireDate            DateTime       @map("hire_date")
+  status              EmployeeStatus @default(ACTIVE)
+  address             String?
+  avatarUrl           String?        @map("avatar_url")
+  reportingManagerId  String?        @map("reporting_manager_id")
+  createdAt           DateTime       @default(now()) @map("created_at")
+  updatedAt           DateTime       @updatedAt @map("updated_at")
   
   // Relations
-  leaveRequests  LeaveRequest[]   @relation("EmployeeLeaves")
-  reviewedLeaves LeaveRequest[]   @relation("ReviewerLeaves")
-  assignedTasks  TaskAssignment[] @relation("AssignedTasks")
-  createdTasks   TaskAssignment[] @relation("CreatedTasks")
-  postedJobs    JobPosting[]               @relation("PostedJobs")
-  statusChanges ApplicationStatusHistory[]  @relation("StatusChanges")
+  reportingManager   Employee?        @relation("ReportingLine", fields: [reportingManagerId], references: [id])
+  directReports      Employee[]       @relation("ReportingLine")
+  user               User?
+  leaveRequests      LeaveRequest[]   @relation("EmployeeLeaves")
+  reviewedLeaves     LeaveRequest[]   @relation("ReviewerLeaves")
+  approverForLeaves  LeaveRequest[]   @relation("ApproverLeaves")
+  assignedTasks      TaskAssignment[] @relation("AssignedTasks")
+  createdTasks       TaskAssignment[] @relation("CreatedTasks")
+  postedJobs         JobPosting[]     @relation("PostedJobs")
+  statusChanges      ApplicationStatusHistory[] @relation("StatusChanges")
+  offboardRequests   OffboardRequest[] @relation("OffboardedEmployee")
+  leaveBalances      LeaveBalance[]
+  attendanceLogs     AttendanceLog[]
+  pmProjects         Project[]        @relation("PMProjects")
+  managedChunks      ProjectChunk[]   @relation("ChunkManager")
+
   @@map("employees")
 }
 
@@ -96,34 +243,160 @@ model LeaveRequest {
   status       LeaveStatus @default(PENDING)
   reviewedById String?     @map("reviewed_by_id")
   reviewedAt   DateTime?   @map("reviewed_at")
+  approverId   String?     @map("approver_id") // Dynamically determined approver
   createdAt    DateTime    @default(now()) @map("created_at")
 
   // Relations
   employee   Employee  @relation("EmployeeLeaves", fields: [employeeId], references: [id])
   reviewedBy Employee? @relation("ReviewerLeaves", fields: [reviewedById], references: [id])
+  approver   Employee? @relation("ApproverLeaves", fields: [approverId], references: [id])
 
   @@map("leave_requests")
 }
 
 model TaskAssignment {
-  id           String       @id @default(uuid())
-  title        String
-  description  String?
-  assignedToId String       @map("assigned_to_id")
-  assignedById String       @map("assigned_by_id")
-  priority     TaskPriority @default(MEDIUM)
-  status       TaskStatus   @default(TODO)
-  deadline     DateTime
-  createdAt    DateTime     @default(now()) @map("created_at")
-  updatedAt    DateTime     @updatedAt @map("updated_at")
+  id             String        @id @default(uuid())
+  title          String
+  description    String?
+  assignedToId   String        @map("assigned_to_id")
+  assignedById   String        @map("assigned_by_id")
+  priority       TaskPriority  @default(MEDIUM)
+  status         TaskStatus    @default(TODO)
+  deadline       DateTime
+  projectId      String?       @map("project_id")
+  projectChunkId String?       @map("project_chunk_id")
+  milestone      String?
+  createdAt      DateTime      @default(now()) @map("created_at")
+  updatedAt      DateTime      @updatedAt @map("updated_at")
 
   // Relations
-  assignedTo Employee @relation("AssignedTasks", fields: [assignedToId], references: [id])
-  assignedBy Employee @relation("CreatedTasks", fields: [assignedById], references: [id])
+  assignedTo   Employee      @relation("AssignedTasks", fields: [assignedToId], references: [id])
+  assignedBy   Employee      @relation("CreatedTasks", fields: [assignedById], references: [id])
+  project      Project?      @relation(fields: [projectId], references: [id])
+  projectChunk ProjectChunk? @relation(fields: [projectChunkId], references: [id])
 
   @@map("task_assignments")
 }
-  // ========== Recruitment module ==========
+
+// ─── Help Desk / Ticketing ──────────────────────────────
+
+model Ticket {
+  id           String         @id @default(uuid())
+  title        String
+  description  String
+  category     TicketCategory
+  status       TicketStatus   @default(OPEN)
+  priority     TicketPriority @default(MEDIUM)
+  raisedById   String         @map("raised_by_id")
+  assignedToId String?        @map("assigned_to_id")
+  createdAt    DateTime       @default(now()) @map("created_at")
+  updatedAt    DateTime       @updatedAt @map("updated_at")
+
+  // Relations
+  raisedBy   User  @relation("RaisedTickets", fields: [raisedById], references: [id])
+  assignedTo User? @relation("AssignedTickets", fields: [assignedToId], references: [id])
+
+  @@map("tickets")
+}
+
+// ─── Project Management ─────────────────────────────────
+
+model Project {
+  id               String        @id @default(uuid())
+  name             String
+  description      String?
+  department       Department
+  status           ProjectStatus @default(ACTIVE)
+  startDate        DateTime      @map("start_date")
+  endDate          DateTime?     @map("end_date")
+  projectManagerId String?       @map("project_manager_id")
+  createdById      String        @map("created_by_id")
+  createdAt        DateTime      @default(now()) @map("created_at")
+  updatedAt        DateTime      @updatedAt @map("updated_at")
+
+  // Relations
+  createdBy      User             @relation(fields: [createdById], references: [id])
+  projectManager Employee?        @relation("PMProjects", fields: [projectManagerId], references: [id])
+  chunks         ProjectChunk[]
+  tasks          TaskAssignment[]
+
+  @@map("projects")
+}
+
+model ProjectChunk {
+  id                 String         @id @default(uuid())
+  title              String
+  description        String?
+  projectId          String         @map("project_id")
+  assignedDepartment Department     @map("assigned_department")
+  assignedManagerId  String?        @map("assigned_manager_id")
+  status             ProjectStatus  @default(ACTIVE)
+  createdAt          DateTime       @default(now()) @map("created_at")
+  updatedAt          DateTime       @updatedAt @map("updated_at")
+
+  // Relations
+  project         Project          @relation(fields: [projectId], references: [id])
+  assignedManager Employee?        @relation("ChunkManager", fields: [assignedManagerId], references: [id])
+  tasks           TaskAssignment[]
+
+  @@map("project_chunks")
+}
+
+// ─── Offboarding ────────────────────────────────────────
+
+model OffboardRequest {
+  id             String         @id @default(uuid())
+  employeeId     String         @map("employee_id")
+  requestedById  String         @map("requested_by_id") // User ID
+  reason         String
+  status         OffboardStatus @default(PENDING)
+  reviewedById   String?        @map("reviewed_by_id") // User ID
+  reviewedAt     DateTime?      @map("reviewed_at")
+  effectiveDate  DateTime       @map("effective_date")
+  createdAt      DateTime       @default(now()) @map("created_at")
+
+  // Relations
+  employee       Employee       @relation("OffboardedEmployee", fields: [employeeId], references: [id])
+
+  @@map("offboard_requests")
+}
+
+// ─── Leave Balances ─────────────────────────────────────
+
+model LeaveBalance {
+  id         String    @id @default(uuid())
+  employeeId String    @map("employee_id")
+  leaveType  LeaveType @map("leave_type")
+  balance    Float     @default(0)
+  year       Int
+
+  // Relations
+  employee   Employee  @relation(fields: [employeeId], references: [id])
+
+  @@unique([employeeId, leaveType, year])
+  @@map("leave_balances")
+}
+
+// ─── Attendance ─────────────────────────────────────────
+
+model AttendanceLog {
+  id           String           @id @default(uuid())
+  employeeId   String           @map("employee_id")
+  date         DateTime
+  clockIn      DateTime?        @map("clock_in")
+  clockOut     DateTime?        @map("clock_out")
+  hoursWorked  Float?           @map("hours_worked")
+  status       AttendanceStatus @default(PRESENT)
+  createdAt    DateTime         @default(now()) @map("created_at")
+
+  // Relations
+  employee     Employee         @relation(fields: [employeeId], references: [id])
+
+  @@unique([employeeId, date])
+  @@map("attendance_logs")
+}
+
+// ─── Recruitment Module ─────────────────────────────────
 
 enum JobPostingStatus {
   ACTIVE
@@ -201,6 +474,4 @@ model ApplicationStatusHistory {
   changedBy     Employee?          @relation("StatusChanges", fields: [changedById], references: [id])
 
   @@map("application_status_history")
-
-
 }

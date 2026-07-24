@@ -1,5 +1,5 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
-import type { Employee, Department, LeaveRequest, Task } from '../types';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import type { Employee, Department, LeaveRequest, Task, User } from '../types';
 import * as api from '../lib/api';
 
 export interface ToastMessage {
@@ -9,13 +9,19 @@ export interface ToastMessage {
 }
 
 interface AppContextType {
+  // User & RBAC
+  currentUser: User | null;
+  allUsers: User[];
+  switchUser: (userId: string) => void;
+  hasPermission: (module: string, action: string) => boolean;
+  highestRole: string; // For display purposes
+
+  // Backward compat
   currentUserRole: 'manager' | 'employee';
-  setCurrentUserRole: (role: 'manager' | 'employee') => void;
   currentEmployeeId: string;
-  setCurrentEmployeeId: (id: string) => void;
   
   employees: Employee[];
-  departments: Department[]; // We'll keep this local for UI mapping since backend doesn't have a departments table
+  departments: Department[];
   leaveRequests: LeaveRequest[];
   tasks: Task[];
   dashboardStats: any;
@@ -31,6 +37,8 @@ interface AppContextType {
   addTask: (task: Omit<Task, 'id' | 'status' | 'employeeName'>) => Promise<void>;
   updateTaskStatus: (id: string, status: 'pending' | 'in-progress' | 'completed') => Promise<void>;
   deleteTask: (id: string) => Promise<void>;
+
+  refreshData: () => Promise<void>;
   
   // Toast notifications
   toasts: ToastMessage[];
@@ -46,21 +54,20 @@ const AppContext = createContext<AppContextType | undefined>(undefined);
 const INITIAL_DEPARTMENTS: Department[] = [
   { id: 'finance', name: 'Finance', color: 'emerald', manager: 'Sarah Jenkins', budget: '$1,450,000', description: 'Accounting' },
   { id: 'hr', name: 'HR', color: 'rose', manager: 'Marcus Vance', budget: '$620,000', description: 'Human Resources' },
-  { id: 'marketing', name: 'Marketing', color: 'purple', manager: 'Chloe Bennett', budget: '$980,000', description: 'Marketing' },
+  { id: 'marketing', name: 'Marketing', color: 'purple', manager: 'Alice Manager', budget: '$980,000', description: 'Marketing' },
   { id: 'sales', name: 'Sales', color: 'blue', manager: 'David Miller', budget: '$1,850,000', description: 'Sales' },
-  { id: 'engineering', name: 'Engineering', color: 'teal', manager: 'Elena Rostova', budget: '$3,200,000', description: 'Engineering' }
+  { id: 'engineering', name: 'Engineering', color: 'teal', manager: 'Elena Rostova', budget: '$3,200,000', description: 'Engineering' },
+  { id: 'operations', name: 'Operations', color: 'amber', manager: 'Sarah Chen', budget: '$1,100,000', description: 'Operations' },
 ];
 
-export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [currentUserRole, setCurrentUserRole] = useState<'manager' | 'employee'>(() => {
-    return (localStorage.getItem('currentUserRole') as 'manager' | 'employee') || 'manager';
-  });
-  
-  // Need to wait for data load before we set current employee
-  const [currentEmployeeId, setCurrentEmployeeId] = useState<string>(() => {
-    return localStorage.getItem('currentEmployeeId') || '';
-  });
+// Role priority for display
+const ROLE_PRIORITY: Record<string, number> = {
+  ADMIN: 7, MANAGER: 6, HR: 5, SALES: 4, SUPPORT: 3, EMPLOYEE: 2, VENDOR: 1,
+};
 
+export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [allUsers, setAllUsers] = useState<User[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [leaveRequests, setLeaveRequests] = useState<LeaveRequest[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -68,19 +75,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Sync to local storage for role and id
-  useEffect(() => {
-    localStorage.setItem('currentUserRole', currentUserRole);
-  }, [currentUserRole]);
+  // Toast functions
+  const showToast = useCallback((message: string, type: 'success' | 'error' | 'info' | 'warning' = 'success') => {
+    const id = Math.random().toString(36).substr(2, 9);
+    setToasts((prev) => [...prev, { id, message, type }]);
+    setTimeout(() => {
+      setToasts((prev) => prev.filter((t) => t.id !== id));
+    }, 4000);
+  }, []);
 
-  useEffect(() => {
-    if (currentEmployeeId) {
-      localStorage.setItem('currentEmployeeId', currentEmployeeId);
-    }
-  }, [currentEmployeeId]);
+  const dismissToast = useCallback((id: string) => {
+    setToasts((prev) => prev.filter((t) => t.id !== id));
+  }, []);
 
-  // Initial Data Load from Backend
-  const refreshData = async () => {
+  // Load data from backend
+  const refreshData = useCallback(async () => {
+    if (!currentUser) return;
     try {
       setIsLoading(true);
       const [emps, leaves, tsks, stats] = await Promise.all([
@@ -94,36 +104,78 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setLeaveRequests(leaves);
       setTasks(tsks);
       setDashboardStats(stats);
-      
-      // Auto-select first employee if none selected
-      if (!currentEmployeeId && emps.length > 0) {
-        setCurrentEmployeeId(emps[0].id);
-      }
     } catch (error: any) {
       showToast(error.message || 'Failed to connect to backend API', 'error');
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [currentUser, showToast]);
 
+  // Load users list on mount (no auth needed)
   useEffect(() => {
-    refreshData();
+    (async () => {
+      try {
+        const users = await api.fetchUsers();
+        setAllUsers(users);
+        
+        // Auto-select saved user or first user
+        const savedUserId = localStorage.getItem('currentUserId');
+        const initialUser = savedUserId
+          ? users.find((u) => u.id === savedUserId) || users[0]
+          : users[0];
+
+        if (initialUser) {
+          api.setCurrentUserId(initialUser.id);
+          const fullUser = await api.fetchCurrentUser();
+          setCurrentUser(fullUser);
+          localStorage.setItem('currentUserId', initialUser.id);
+        }
+      } catch (error: any) {
+        showToast(error.message || 'Failed to load users', 'error');
+        setIsLoading(false);
+      }
+    })();
   }, []);
 
-  // Toast functions
-  const showToast = (message: string, type: 'success' | 'error' | 'info' | 'warning' = 'success') => {
-    const id = Math.random().toString(36).substr(2, 9);
-    setToasts((prev) => [...prev, { id, message, type }]);
-    setTimeout(() => {
-      dismissToast(id);
-    }, 4000);
-  };
+  // Refresh data when user changes
+  useEffect(() => {
+    if (currentUser) {
+      refreshData();
+    }
+  }, [currentUser]);
 
-  const dismissToast = (id: string) => {
-    setToasts((prev) => prev.filter((t) => t.id !== id));
-  };
+  // Switch impersonated user
+  const switchUser = useCallback(async (userId: string) => {
+    try {
+      api.setCurrentUserId(userId);
+      const fullUser = await api.fetchCurrentUser();
+      setCurrentUser(fullUser);
+      localStorage.setItem('currentUserId', userId);
+      showToast(`Switched to ${fullUser.name}`, 'info');
+    } catch (error: any) {
+      showToast(error.message || 'Failed to switch user', 'error');
+    }
+  }, [showToast]);
 
-  // Actions wrapped with API calls
+  // Permission check helper
+  const hasPermission = useCallback((module: string, action: string): boolean => {
+    if (!currentUser?.permissions) return false;
+    return currentUser.permissions.includes(`${module}.${action}`);
+  }, [currentUser]);
+
+  // Derive highest role for display
+  const highestRole = currentUser?.roles
+    ? currentUser.roles.reduce((best, r) => (ROLE_PRIORITY[r] || 0) > (ROLE_PRIORITY[best] || 0) ? r : best, currentUser.roles[0] || 'EMPLOYEE')
+    : 'EMPLOYEE';
+
+  // Backward compat: map to 'manager' | 'employee'
+  const currentUserRole: 'manager' | 'employee' = 
+    currentUser?.roles?.some(r => ['ADMIN', 'MANAGER', 'HR'].includes(r)) ? 'manager' : 'employee';
+
+  const currentEmployeeId = currentUser?.employeeId || '';
+
+  // ─── Actions ──────────────────────────────────────────
+
   const addEmployee = async (newEmpData: Omit<Employee, 'id'>) => {
     try {
       await api.createEmployee({
@@ -133,6 +185,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         phoneNumber: newEmpData.phone,
         department: newEmpData.departmentId,
         position: newEmpData.role,
+        systemRole: newEmpData.systemRole,
         hireDate: newEmpData.joiningDate,
         address: newEmpData.address
       });
@@ -166,7 +219,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const deactivateEmployee = async (id: string, currentStatus: string) => {
     try {
       const newStatus = currentStatus === 'inactive' ? 'active' : 'inactive';
-      await api.toggleEmployeeStatusAPI(id, newStatus);
+      await api.toggleEmployeeStatusAPI(id, newStatus as Employee['status']);
       await refreshData();
       showToast(`Employee is now marked as ${newStatus}`, newStatus === 'active' ? 'success' : 'warning');
     } catch (err: any) {
@@ -194,7 +247,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const updateLeaveRequestStatus = async (id: string, status: 'approved' | 'denied') => {
     try {
-      await api.reviewLeaveRequestAPI(id, status, currentEmployeeId); // Use current user as reviewer
+      await api.reviewLeaveRequestAPI(id, status, currentEmployeeId);
       await refreshData();
       showToast(`Leave request has been ${status}`, status === 'approved' ? 'success' : 'error');
     } catch (err: any) {
@@ -209,7 +262,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         title: taskData.title,
         description: taskData.description,
         assignedToId: taskData.employeeId,
-        assignedById: currentEmployeeId, // Current user is assigner
+        assignedById: currentEmployeeId,
         priority: taskData.priority,
         deadline: taskData.deadline
       });
@@ -246,10 +299,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   return (
     <AppContext.Provider
       value={{
+        currentUser,
+        allUsers,
+        switchUser,
+        hasPermission,
+        highestRole,
         currentUserRole,
-        setCurrentUserRole,
         currentEmployeeId,
-        setCurrentEmployeeId,
         employees,
         departments: INITIAL_DEPARTMENTS,
         leaveRequests,
@@ -264,6 +320,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         addTask,
         updateTaskStatus,
         deleteTask,
+        refreshData,
         toasts,
         showToast,
         dismissToast,

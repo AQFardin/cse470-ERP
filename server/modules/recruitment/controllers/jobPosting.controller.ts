@@ -69,7 +69,7 @@ export async function getActiveJobPostings(_req: Request, res: Response) {
 // ─── GET Single Job Posting ──────────────────────────────
 export async function getJobPosting(req: Request, res: Response) {
   try {
-    const { id } = req.params;
+    const id = req.params.id as string;
     const jobPosting = await prisma.jobPosting.findUnique({ where: { id } });
 
     if (!jobPosting) {
@@ -87,7 +87,7 @@ export async function getJobPosting(req: Request, res: Response) {
 // ─── UPDATE Job Posting (HR only — edit details or close it) ──
 export async function updateJobPosting(req: Request, res: Response) {
   try {
-    const { id } = req.params;
+    const id = req.params.id as string;
     const { title, description, requirements, location, department, status } = req.body;
 
     const data: any = {

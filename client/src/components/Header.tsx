@@ -1,7 +1,7 @@
-import React from 'react';
-import { Search, ShieldAlert, Sparkles, User, Bell, ChevronDown, Menu } from 'lucide-react';
+import React, { useState, useRef, useEffect } from 'react';
+import { Search, Bell, ChevronDown, Menu, Shield, UserCheck, Crown, HeartHandshake, Headphones, ShoppingBag, Users as UsersIcon } from 'lucide-react';
 import { useApp } from '../context/AppContext';
-import { motion } from 'motion/react';
+import { motion, AnimatePresence } from 'motion/react';
 
 interface HeaderProps {
   searchQuery: string;
@@ -10,10 +10,34 @@ interface HeaderProps {
   onMenuToggle?: () => void;
 }
 
-export default function Header({ searchQuery, setSearchQuery, showSearch, onMenuToggle }: HeaderProps) {
-  const { currentUserRole, setCurrentUserRole, employees, currentEmployeeId } = useApp();
+const ROLE_CONFIG: Record<string, { icon: React.ElementType; color: string; bgColor: string }> = {
+  ADMIN: { icon: Crown, color: 'text-amber-500', bgColor: 'bg-amber-500/10' },
+  MANAGER: { icon: Shield, color: 'text-indigo-500', bgColor: 'bg-indigo-500/10' },
+  HR: { icon: HeartHandshake, color: 'text-rose-500', bgColor: 'bg-rose-500/10' },
+  SALES: { icon: ShoppingBag, color: 'text-blue-500', bgColor: 'bg-blue-500/10' },
+  SUPPORT: { icon: Headphones, color: 'text-teal-500', bgColor: 'bg-teal-500/10' },
+  EMPLOYEE: { icon: UserCheck, color: 'text-emerald-500', bgColor: 'bg-emerald-500/10' },
+  VENDOR: { icon: UsersIcon, color: 'text-gray-500', bgColor: 'bg-gray-500/10' },
+};
 
-  const me = employees.find(e => e.id === currentEmployeeId);
+export default function Header({ searchQuery, setSearchQuery, showSearch, onMenuToggle }: HeaderProps) {
+  const { currentUser, allUsers, switchUser, highestRole } = useApp();
+  const [dropdownOpen, setDropdownOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  // Close dropdown on click outside
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        setDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
+  const roleConfig = ROLE_CONFIG[highestRole] || ROLE_CONFIG.EMPLOYEE;
+  const RoleIcon = roleConfig.icon;
 
   return (
     <header className="h-16 border-b border-gray-200 bg-white px-4 md:px-6 flex items-center justify-between shrink-0 select-none gap-4">
@@ -48,51 +72,14 @@ export default function Header({ searchQuery, setSearchQuery, showSearch, onMenu
         )}
       </div>
 
-      {/* Right Tools: Role Toggle, Notifications, Avatar */}
-      <div className="flex items-center gap-6">
-        {/* Customized Pill Toggle for Role Switcher */}
-        <div className="flex items-center gap-2.5">
-          <span className="text-xs font-medium text-gray-400">View Mode</span>
-          <div className="p-1 bg-gray-100 border border-gray-200/60 rounded-xl flex gap-0.5 relative">
-            <button
-              onClick={() => {
-                setCurrentUserRole('manager');
-              }}
-              className={`px-3 py-1 text-xs font-semibold rounded-lg transition-all relative z-10 cursor-pointer ${
-                currentUserRole === 'manager' 
-                  ? 'text-indigo-600 shadow-xs' 
-                  : 'text-gray-500 hover:text-gray-900'
-              }`}
-            >
-              {currentUserRole === 'manager' && (
-                <motion.div
-                  layoutId="role-bg"
-                  className="absolute inset-0 bg-white rounded-lg border border-gray-200/50 shadow-xs"
-                  transition={{ type: 'spring', stiffness: 350, damping: 25 }}
-                />
-              )}
-              <span className="relative z-10">Manager</span>
-            </button>
-            <button
-              onClick={() => {
-                setCurrentUserRole('employee');
-              }}
-              className={`px-3 py-1 text-xs font-semibold rounded-lg transition-all relative z-10 cursor-pointer ${
-                currentUserRole === 'employee' 
-                  ? 'text-indigo-600 shadow-xs' 
-                  : 'text-gray-500 hover:text-gray-900'
-              }`}
-            >
-              {currentUserRole === 'employee' && (
-                <motion.div
-                  layoutId="role-bg"
-                  className="absolute inset-0 bg-white rounded-lg border border-gray-200/50 shadow-xs"
-                  transition={{ type: 'spring', stiffness: 350, damping: 25 }}
-                />
-              )}
-              <span className="relative z-10">Employee</span>
-            </button>
-          </div>
+      {/* Right Tools */}
+      <div className="flex items-center gap-4">
+        {/* Role Badge */}
+        <div className={`hidden md:flex items-center gap-1.5 px-2.5 py-1 rounded-lg ${roleConfig.bgColor} border border-current/10`}>
+          <RoleIcon className={`w-3.5 h-3.5 ${roleConfig.color}`} />
+          <span className={`text-[10px] font-bold uppercase tracking-wider ${roleConfig.color}`}>
+            {highestRole}
+          </span>
         </div>
 
         {/* Notifications */}
@@ -101,15 +88,87 @@ export default function Header({ searchQuery, setSearchQuery, showSearch, onMenu
           <span className="absolute top-1 right-1 w-1.5 h-1.5 bg-indigo-500 rounded-full" />
         </button>
 
-        {/* User Dropdown */}
-        <div className="flex items-center gap-2.5 pl-4 border-l border-gray-100">
-          <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-indigo-500 to-violet-500 text-white font-bold flex items-center justify-center text-xs shadow-sm">
-            {me ? me.name.split(' ').map(n => n[0]).join('') : 'FA'}
-          </div>
-          <div className="hidden md:flex flex-col text-left">
-            <span className="text-xs font-semibold text-gray-800 leading-tight">{me?.name || 'Fardin Ahmed'}</span>
-            <span className="text-[10px] text-gray-400 leading-tight">{me?.role || 'Financial Analyst'}</span>
-          </div>
+        {/* User Impersonation Dropdown */}
+        <div className="relative" ref={dropdownRef}>
+          <button
+            onClick={() => setDropdownOpen(!dropdownOpen)}
+            className="flex items-center gap-2.5 pl-4 border-l border-gray-100 cursor-pointer hover:bg-gray-50 rounded-xl py-1 pr-2 transition-colors"
+          >
+            <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-indigo-500 to-violet-500 text-white font-bold flex items-center justify-center text-xs shadow-sm">
+              {currentUser ? currentUser.name.split(' ').map(n => n[0]).join('') : '??'}
+            </div>
+            <div className="hidden md:flex flex-col text-left">
+              <span className="text-xs font-semibold text-gray-800 leading-tight">{currentUser?.name || 'Loading...'}</span>
+              <span className="text-[10px] text-gray-400 leading-tight">{currentUser?.employee?.position || ''}</span>
+            </div>
+            <ChevronDown className={`w-3.5 h-3.5 text-gray-400 transition-transform ${dropdownOpen ? 'rotate-180' : ''}`} />
+          </button>
+
+          {/* Dropdown */}
+          <AnimatePresence>
+            {dropdownOpen && (
+              <motion.div
+                initial={{ opacity: 0, y: -8, scale: 0.96 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: -8, scale: 0.96 }}
+                transition={{ duration: 0.15 }}
+                className="absolute right-0 top-full mt-2 w-72 bg-white border border-gray-200 rounded-2xl shadow-xl shadow-black/8 overflow-hidden z-50"
+              >
+                <div className="px-4 py-3 border-b border-gray-100 bg-gray-50/50">
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Switch User (Impersonate)</p>
+                </div>
+                <div className="max-h-80 overflow-y-auto py-1">
+                  {allUsers.map((user) => {
+                    const isActive = currentUser?.id === user.id;
+                    const uRoles = (user.roles || []).filter(r => r !== 'EMPLOYEE');
+                    const displayRole = uRoles.length > 0 ? uRoles[0] : 'EMPLOYEE';
+                    const config = ROLE_CONFIG[displayRole] || ROLE_CONFIG.EMPLOYEE;
+                    const Icon = config.icon;
+
+                    return (
+                      <button
+                        key={user.id}
+                        onClick={() => {
+                          switchUser(user.id);
+                          setDropdownOpen(false);
+                        }}
+                        className={`w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors cursor-pointer ${
+                          isActive ? 'bg-indigo-50/80' : 'hover:bg-gray-50'
+                        }`}
+                      >
+                        <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold shrink-0 ${
+                          isActive
+                            ? 'bg-gradient-to-tr from-indigo-500 to-violet-500 text-white'
+                            : 'bg-gray-100 text-gray-600'
+                        }`}>
+                          {user.name.split(' ').map(n => n[0]).join('')}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-1.5">
+                            <span className={`text-xs font-semibold truncate ${isActive ? 'text-indigo-700' : 'text-gray-800'}`}>
+                              {user.name}
+                            </span>
+                            {isActive && (
+                              <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 shrink-0" />
+                            )}
+                          </div>
+                          <div className="flex items-center gap-1 mt-0.5">
+                            <Icon className={`w-3 h-3 ${config.color}`} />
+                            <span className={`text-[10px] font-semibold uppercase tracking-wider ${config.color}`}>
+                              {uRoles.join(' + ') || 'EMPLOYEE'}
+                            </span>
+                          </div>
+                        </div>
+                        <span className="text-[10px] text-gray-400 font-mono shrink-0">
+                          {user.employee?.employeeId || ''}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
       </div>
     </header>
