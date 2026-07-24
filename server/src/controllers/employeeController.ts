@@ -72,7 +72,7 @@ export async function createEmployee(req: Request, res: Response) {
       });
 
       // Assign Roles
-      const roleAssignments = [{ userId: user.id, role: SystemRole.EMPLOYEE }];
+      const roleAssignments: { userId: string; role: SystemRole }[] = [{ userId: user.id, role: SystemRole.EMPLOYEE }];
       
       // If a specific system role is assigned, give them that too
       if (systemRole !== 'EMPLOYEE' && Object.values(SystemRole).includes(systemRole)) {
@@ -126,8 +126,9 @@ export async function getAllEmployees(req: Request, res: Response) {
     // Role-based scoping
     const canViewAll = await userHasPermission(userRoles, 'employee_records', 'view_all');
     const canViewTeam = await userHasPermission(userRoles, 'employee_records', 'view_team');
+    const isProjectManager = userRoles.includes('PROJECT_MANAGER');
 
-    if (canViewAll) {
+    if (canViewAll || isProjectManager) {
       // No additional scoping — see everyone
     } else if (canViewTeam && employeeId) {
       // Manager: see own record + team in their department

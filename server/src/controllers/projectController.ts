@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import { prisma } from '../lib/prisma';
-import { Department, ProjectStatus } from '@prisma/client';
+import { Department, ProjectStatus, Role } from '@prisma/client';
 import { logAudit } from '../lib/auditLog';
 
 // ─── CREATE Project (Admin Creates Project & Assigns PM) ───
@@ -55,6 +55,35 @@ export async function createProjectChunk(req: Request, res: Response) {
     if (!projectId || !title || !assignedDepartment) {
       res.status(400).json({ success: false, error: 'projectId, title, and assignedDepartment are required' });
       return;
+    }
+
+    // Prevent PM from assigning chunk to themselves
+    const currentEmployeeId = req.currentUser!.employeeId;
+    if (assignedManagerId && assignedManagerId === currentEmployeeId) {
+      res.status(400).json({ success: false, error: 'Project Managers cannot assign project chunks to themselves' });
+      return;
+    }
+
+    // Validate that the assigned manager is a department MANAGER of the correct department
+    if (assignedManagerId) {
+      const manager = await prisma.employee.findUnique({
+        where: { id: assignedManagerId },
+      });
+
+      if (!manager) {
+        res.status(404).json({ success: false, error: 'Selected manager not found' });
+        return;
+      }
+
+      if (manager.role !== Role.MANAGER) {
+        res.status(400).json({ success: false, error: 'The selected employee is not a department manager' });
+        return;
+      }
+
+      if (manager.department !== (assignedDepartment as Department)) {
+        res.status(400).json({ success: false, error: `The selected manager does not belong to the ${assignedDepartment} department` });
+        return;
+      }
     }
 
     const chunk = await prisma.projectChunk.create({
@@ -223,6 +252,28 @@ export async function updateProjectChunk(req: Request, res: Response) {
     if (!before) {
       res.status(404).json({ success: false, error: 'Project chunk not found' });
       return;
+    }
+
+    const targetDept = assignedDepartment || before.assignedDepartment;
+    if (assignedManagerId) {
+      const manager = await prisma.employee.findUnique({
+        where: { id: assignedManagerId },
+      });
+
+      if (!manager) {
+        res.status(404).json({ success: false, error: 'Selected manager not found' });
+        return;
+      }
+
+      if (manager.role !== Role.MANAGER) {
+        res.status(400).json({ success: false, error: 'The selected employee is not a department manager' });
+        return;
+      }
+
+      if (manager.department !== (targetDept as Department)) {
+        res.status(400).json({ success: false, error: `The selected manager does not belong to the ${targetDept} department` });
+        return;
+      }
     }
 
     const chunk = await prisma.projectChunk.update({

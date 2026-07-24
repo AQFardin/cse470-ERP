@@ -21,6 +21,34 @@ async function createTask(req, res) {
             res.status(404).json({ success: false, error: 'Assigned employee not found' });
             return;
         }
+        // Fetch the assigner
+        const assignerId = assignedById || req.currentUser.employeeId;
+        const assigner = await prisma_1.prisma.employee.findUnique({
+            where: { id: assignerId },
+        });
+        if (!assigner) {
+            res.status(404).json({ success: false, error: 'Assigner not found' });
+            return;
+        }
+        // Check if the assigner is a Project Manager (cross-department role)
+        const userRoles = req.currentUser.roles;
+        const isProjectManager = userRoles.includes('PROJECT_MANAGER');
+        // Project Managers cannot assign tasks to themselves
+        if (isProjectManager && assignerId === assignedToId) {
+            res.status(400).json({ success: false, error: 'Project Managers cannot assign tasks to themselves' });
+            return;
+        }
+        // Department managers: enforce same-department restriction
+        // Project managers: skip department check (they operate cross-department)
+        if (!isProjectManager && assigner.department !== assignee.department) {
+            res.status(403).json({ success: false, error: 'You can only assign tasks to employees in your own department' });
+            return;
+        }
+        // Enforce that tasks cannot be assigned to department managers
+        if (assignee.role === client_1.Role.MANAGER || assignee.position.toLowerCase().includes('manager')) {
+            res.status(400).json({ success: false, error: 'Tasks can only be assigned to regular team employees, not department managers' });
+            return;
+        }
         const task = await prisma_1.prisma.taskAssignment.create({
             data: {
                 title,

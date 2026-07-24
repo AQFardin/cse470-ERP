@@ -6,6 +6,7 @@ const authorize_1 = require("../middleware/authorize");
 const router = (0, express_1.Router)();
 router.post('/', (0, authorize_1.requirePermission)('project', 'create'), projectController_1.createProject); // Only Admin creates project + assigns PM
 router.post('/chunks', (0, authorize_1.requirePermission)('project', 'chunk_create'), projectController_1.createProjectChunk); // Project Manager delegates chunk to Dept
+router.patch('/chunks/:chunkId', (0, authorize_1.requirePermission)('project', 'chunk_create'), projectController_1.updateProjectChunk); // Project Manager edits chunk
 router.get('/', projectController_1.getAllProjects);
 router.get('/:id', projectController_1.getProject);
 router.patch('/:id', (0, authorize_1.requirePermission)('project', 'edit'), projectController_1.updateProject);

@@ -433,7 +433,7 @@ async function main() {
       'project.create', 'project.view_all', 'project.edit',
     ],
     PROJECT_MANAGER: [
-      'employee_records.view_own',
+      'employee_records.view_own', 'employee_records.view_all',
       'project.view_all', 'project.chunk_create',
       'task.view_all', 'task.view_own',
       'leave.request',

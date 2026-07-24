@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import { prisma } from '../lib/prisma';
-import { TaskPriority, TaskStatus } from '@prisma/client';
+import { Role, TaskPriority, TaskStatus } from '@prisma/client';
 import { logAudit } from '../lib/auditLog';
 import { userHasPermission } from '../middleware/authorize';
 
@@ -18,8 +18,7 @@ export async function createTask(req: Request, res: Response) {
       return;
     }
     
-    // Enforce that managers can only assign tasks to employees in their own department
-    // Fetch the assigner's department
+    // Fetch the assigner
     const assignerId = assignedById || req.currentUser!.employeeId!;
     const assigner = await prisma.employee.findUnique({
       where: { id: assignerId },
@@ -29,9 +28,20 @@ export async function createTask(req: Request, res: Response) {
       res.status(404).json({ success: false, error: 'Assigner not found' });
       return;
     }
-    
-    // We check if the assignee's department matches the assigner's department
-    if (assigner.department !== assignee.department) {
+
+    // Check if the assigner is a Project Manager (cross-department role)
+    const userRoles = req.currentUser!.roles;
+    const isProjectManager = userRoles.includes('PROJECT_MANAGER');
+
+    // Project Managers cannot assign tasks to themselves
+    if (isProjectManager && assignerId === assignedToId) {
+      res.status(400).json({ success: false, error: 'Project Managers cannot assign tasks to themselves' });
+      return;
+    }
+
+    // Department managers: enforce same-department restriction
+    // Project managers: skip department check (they operate cross-department)
+    if (!isProjectManager && assigner.department !== assignee.department) {
       res.status(403).json({ success: false, error: 'You can only assign tasks to employees in your own department' });
       return;
     }

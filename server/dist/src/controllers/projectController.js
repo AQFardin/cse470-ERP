@@ -5,6 +5,7 @@ exports.createProjectChunk = createProjectChunk;
 exports.getAllProjects = getAllProjects;
 exports.getProject = getProject;
 exports.updateProject = updateProject;
+exports.updateProjectChunk = updateProjectChunk;
 const prisma_1 = require("../lib/prisma");
 const client_1 = require("@prisma/client");
 const auditLog_1 = require("../lib/auditLog");
@@ -55,6 +56,30 @@ async function createProjectChunk(req, res) {
         if (!projectId || !title || !assignedDepartment) {
             res.status(400).json({ success: false, error: 'projectId, title, and assignedDepartment are required' });
             return;
+        }
+        // Prevent PM from assigning chunk to themselves
+        const currentEmployeeId = req.currentUser.employeeId;
+        if (assignedManagerId && assignedManagerId === currentEmployeeId) {
+            res.status(400).json({ success: false, error: 'Project Managers cannot assign project chunks to themselves' });
+            return;
+        }
+        // Validate that the assigned manager is a department MANAGER of the correct department
+        if (assignedManagerId) {
+            const manager = await prisma_1.prisma.employee.findUnique({
+                where: { id: assignedManagerId },
+            });
+            if (!manager) {
+                res.status(404).json({ success: false, error: 'Selected manager not found' });
+                return;
+            }
+            if (manager.role !== client_1.Role.MANAGER) {
+                res.status(400).json({ success: false, error: 'The selected employee is not a department manager' });
+                return;
+            }
+            if (manager.department !== assignedDepartment) {
+                res.status(400).json({ success: false, error: `The selected manager does not belong to the ${assignedDepartment} department` });
+                return;
+            }
         }
         const chunk = await prisma_1.prisma.projectChunk.create({
             data: {
@@ -201,6 +226,63 @@ async function updateProject(req, res) {
     catch (error) {
         console.error('Update project error:', error);
         res.status(500).json({ success: false, error: 'Failed to update project' });
+    }
+}
+// ─── UPDATE Project Chunk ────────────────────────────────
+async function updateProjectChunk(req, res) {
+    try {
+        const chunkId = req.params.chunkId;
+        const { title, description, assignedDepartment, assignedManagerId, status } = req.body;
+        const before = await prisma_1.prisma.projectChunk.findUnique({ where: { id: chunkId } });
+        if (!before) {
+            res.status(404).json({ success: false, error: 'Project chunk not found' });
+            return;
+        }
+        const targetDept = assignedDepartment || before.assignedDepartment;
+        if (assignedManagerId) {
+            const manager = await prisma_1.prisma.employee.findUnique({
+                where: { id: assignedManagerId },
+            });
+            if (!manager) {
+                res.status(404).json({ success: false, error: 'Selected manager not found' });
+                return;
+            }
+            if (manager.role !== client_1.Role.MANAGER) {
+                res.status(400).json({ success: false, error: 'The selected employee is not a department manager' });
+                return;
+            }
+            if (manager.department !== targetDept) {
+                res.status(400).json({ success: false, error: `The selected manager does not belong to the ${targetDept} department` });
+                return;
+            }
+        }
+        const chunk = await prisma_1.prisma.projectChunk.update({
+            where: { id: chunkId },
+            data: {
+                ...(title && { title }),
+                ...(description !== undefined && { description }),
+                ...(assignedDepartment && { assignedDepartment: assignedDepartment }),
+                ...(assignedManagerId !== undefined && { assignedManagerId: assignedManagerId || null }),
+                ...(status && { status }),
+            },
+            include: {
+                project: { select: { id: true, name: true } },
+                assignedManager: { select: { id: true, firstName: true, lastName: true, employeeId: true } },
+            },
+        });
+        await (0, auditLog_1.logAudit)({
+            actorId: req.currentUser.id,
+            action: 'UPDATE',
+            targetEntity: 'ProjectChunk',
+            targetId: chunkId,
+            before,
+            after: chunk,
+        });
+        res.json({ success: true, data: chunk });
+    }
+    catch (error) {
+        console.error('Update project chunk error:', error);
+        res.status(500).json({ success: false, error: 'Failed to update project chunk' });
     }
 }
 //# sourceMappingURL=projectController.js.map

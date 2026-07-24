@@ -13,7 +13,7 @@ const authorize_1 = require("../middleware/authorize");
 // ─── CREATE Employee ────────────────────────────────────
 async function createEmployee(req, res) {
     try {
-        const { firstName, lastName, email, phoneNumber, department, position, role, hireDate, address, avatarUrl, reportingManagerId, } = req.body;
+        const { firstName, lastName, email, phoneNumber, department, position, role, hireDate, address, avatarUrl, reportingManagerId, systemRole, } = req.body;
         // Generate next employee ID
         const lastEmployee = await prisma_1.prisma.employee.findFirst({
             orderBy: { createdAt: 'desc' },
@@ -49,6 +49,24 @@ async function createEmployee(req, res) {
             targetId: employee.id,
             after: employee,
         });
+        // Automatically create a corresponding User for the Employee
+        if (systemRole) {
+            const user = await prisma_1.prisma.user.create({
+                data: {
+                    employeeId: employee.id,
+                    name: `${firstName} ${lastName}`,
+                    email,
+                    passwordHash: '$2b$10$EpRnTzVlqHNP0.fUbXUwSOyuiCR/PeRoIGL5JZ9As3Z5Y.V3iE0r2', // dummy 'password'
+                },
+            });
+            // Assign Roles
+            const roleAssignments = [{ userId: user.id, role: client_1.SystemRole.EMPLOYEE }];
+            // If a specific system role is assigned, give them that too
+            if (systemRole !== 'EMPLOYEE' && Object.values(client_1.SystemRole).includes(systemRole)) {
+                roleAssignments.push({ userId: user.id, role: systemRole });
+            }
+            await prisma_1.prisma.userRole.createMany({ data: roleAssignments });
+        }
         res.status(201).json({ success: true, data: employee });
     }
     catch (error) {
@@ -90,16 +108,23 @@ async function getAllEmployees(req, res) {
         // Role-based scoping
         const canViewAll = await (0, authorize_1.userHasPermission)(userRoles, 'employee_records', 'view_all');
         const canViewTeam = await (0, authorize_1.userHasPermission)(userRoles, 'employee_records', 'view_team');
-        if (canViewAll) {
+        const isProjectManager = userRoles.includes('PROJECT_MANAGER');
+        if (canViewAll || isProjectManager) {
             // No additional scoping — see everyone
         }
         else if (canViewTeam && employeeId) {
-            // Manager: see own record + direct reports
-            where.OR = [
-                ...(where.OR || []),
-                { id: employeeId },
-                { reportingManagerId: employeeId },
-            ];
+            // Manager: see own record + team in their department
+            const currentEmp = await prisma_1.prisma.employee.findUnique({ where: { id: employeeId } });
+            if (currentEmp) {
+                where.OR = [
+                    { department: currentEmp.department },
+                    { reportingManagerId: employeeId },
+                    { id: employeeId },
+                ];
+            }
+            else {
+                where.id = employeeId;
+            }
         }
         else if (employeeId) {
             // Employee: own record only

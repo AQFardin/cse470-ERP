@@ -460,7 +460,7 @@ export default function ProjectView() {
                 <label className="block font-semibold text-gray-700 mb-1">Assign to Department *</label>
                 <select
                   value={chunkDept}
-                  onChange={(e) => setChunkDept(e.target.value)}
+                  onChange={(e) => { setChunkDept(e.target.value); setChunkManagerId(''); }}
                   className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs focus:ring-1 focus:ring-purple-500 cursor-pointer"
                   required
                 >
@@ -482,7 +482,20 @@ export default function ProjectView() {
                 >
                   <option value="">Select Department Manager...</option>
                   {employees
-                    .filter((emp) => emp.id !== currentEmployeeId)
+                    .filter((emp) => {
+                      // Only show department managers of the selected department
+                      // Exclude Project Managers and regular employees
+                      const isProjectManager =
+                        emp.systemRole === 'PROJECT_MANAGER' ||
+                        emp.role.toLowerCase().includes('project manager');
+                      if (isProjectManager) return false;
+
+                      const isDeptManager =
+                        emp.systemRole === 'MANAGER' ||
+                        emp.role.toLowerCase().includes('manager');
+
+                      return isDeptManager && emp.departmentId === chunkDept;
+                    })
                     .map((emp) => (
                       <option key={emp.id} value={emp.id}>
                         {emp.name} ({emp.departmentId.toUpperCase()} - {emp.role})
@@ -548,7 +561,7 @@ export default function ProjectView() {
                 <label className="block font-semibold text-gray-700 mb-1">Assign to Department *</label>
                 <select
                   value={editChunkDept}
-                  onChange={(e) => setEditChunkDept(e.target.value)}
+                  onChange={(e) => { setEditChunkDept(e.target.value); setEditChunkManagerId(''); }}
                   className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs focus:ring-1 focus:ring-purple-500 cursor-pointer"
                   required
                 >
@@ -570,7 +583,20 @@ export default function ProjectView() {
                 >
                   <option value="">Select Department Manager...</option>
                   {employees
-                    .filter((emp) => emp.id !== currentEmployeeId)
+                    .filter((emp) => {
+                      // Only show department managers of the selected department
+                      // Exclude Project Managers and regular employees
+                      const isProjectManager =
+                        emp.systemRole === 'PROJECT_MANAGER' ||
+                        emp.role.toLowerCase().includes('project manager');
+                      if (isProjectManager) return false;
+
+                      const isDeptManager =
+                        emp.systemRole === 'MANAGER' ||
+                        emp.role.toLowerCase().includes('manager');
+
+                      return isDeptManager && emp.departmentId === editChunkDept;
+                    })
                     .map((emp) => (
                       <option key={emp.id} value={emp.id}>
                         {emp.name} ({emp.departmentId.toUpperCase()} - {emp.role})
