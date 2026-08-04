@@ -13,7 +13,8 @@ import {
   UserCheck,
   X,
   Briefcase,
-  UsersRound
+  UsersRound,
+  Package,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 
@@ -44,6 +45,7 @@ export default function Sidebar({
     { name: 'Tasks', path: '/tasks', icon: CheckSquare },
     { name: 'Job Postings', path: '/recruitment/postings', icon: Briefcase },
     { name: 'Candidates', path: '/recruitment/candidates', icon: UsersRound },
+    { name: 'Product Catalog', path: '/catalog', icon: Package },
   ];
 
   if (isMobile) {

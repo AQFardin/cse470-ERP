@@ -6,6 +6,7 @@ import taskRoutes from './routes/tasks';
 import jobPostingRoutes from '../modules/recruitment/routes/jobPosting.routes';
 import applicantRoutes from '../modules/recruitment/routes/applicant.routes';
 import applicationRoutes from '../modules/recruitment/routes/application.routes';
+import catalogRoutes from '../modules/catalog/routes/catalog.routes';
 import path from 'path';
 
 const app = express();
@@ -30,6 +31,7 @@ app.use('/api/tasks', taskRoutes);
 app.use('/api/job-postings', jobPostingRoutes);
 app.use('/api/applicants', applicantRoutes);
 app.use('/api/applications', applicationRoutes);
+app.use('/api/catalog', catalogRoutes);
 app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 // ─── Start Server ───────────────────────────────────────
 app.listen(PORT, () => {
@@ -38,6 +40,7 @@ app.listen(PORT, () => {
   console.log(`   Employees:     http://localhost:${PORT}/api/employees`);
   console.log(`   Leave Requests: http://localhost:${PORT}/api/leave-requests`);
   console.log(`   Tasks:         http://localhost:${PORT}/api/tasks\n`);
+  console.log(`   Catalog:       http://localhost:${PORT}/api/catalog/products\n`);
 });
 
 export default app;

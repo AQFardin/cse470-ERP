@@ -22,6 +22,12 @@ import StatusCheckPage from './modules/recruitment/pages/StatusCheckPage';
 import JobPostingsAdminPage from './modules/recruitment/pages/JobPostingsAdminPage';
 import CandidateDatabasePage from './modules/recruitment/pages/CandidateDatabasePage';
 
+//products catalog 
+import { CatalogProvider } from './modules/catalog/context/CatalogContext';
+import CatalogPage from './modules/catalog/pages/CatalogPage';
+import ProductDetailPage from './modules/catalog/pages/ProductDetailPage';
+import CatalogAdminPage from './modules/catalog/pages/CatalogAdminPage';
+
 function AppContent() {
   const { path, navigate, params } = useSimpleRouter();
   const [pathname, search] = path.split('?');
@@ -60,12 +66,20 @@ function AppContent() {
         return <JobPostingsAdminPage />;
       case '/recruitment/candidates':
         return <CandidateDatabasePage />;
-
+      case '/catalog':
+        return <CatalogPage onNavigate={navigate} />;
+      case '/catalog/manage':
+        return <CatalogAdminPage />;
       default:
         // Handle employee detail route (/employees/:id)
         if (path.startsWith('/employees/') && params.id) {
           return <EmployeeDetailView id={params.id} onNavigate={navigate} />;
         }
+        if (pathname.startsWith('/catalog/') && pathname !== '/catalog/manage') {
+          const productId = pathname.split('/')[2];
+          return <ProductDetailPage productId={productId} onNavigate={navigate} />;
+        }
+        
         return <DashboardView onNavigate={navigate} />;
     }
   };
@@ -115,9 +129,11 @@ function AppContent() {
 
 export default function App() {
   return (
-    <AppProvider>
+  <AppProvider>
       <RecruitmentProvider>
-        <AppContent />
+        <CatalogProvider>
+          <AppContent />
+        </CatalogProvider>
       </RecruitmentProvider>
     </AppProvider>
   );
