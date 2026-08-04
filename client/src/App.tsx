@@ -14,8 +14,18 @@ import AddEmployeeView from './components/AddEmployeeView';
 import LeaveRequestsView from './components/LeaveRequestsView';
 import TasksView from './components/TasksView';
 
+//Recruitment view
+import { RecruitmentProvider } from './modules/recruitment/context/RecruitmentContext';
+import CareersPage from './modules/recruitment/pages/CareersPage';
+import ApplyPage from './modules/recruitment/pages/ApplyPage';
+import StatusCheckPage from './modules/recruitment/pages/StatusCheckPage';
+import JobPostingsAdminPage from './modules/recruitment/pages/JobPostingsAdminPage';
+import CandidateDatabasePage from './modules/recruitment/pages/CandidateDatabasePage';
+
 function AppContent() {
   const { path, navigate, params } = useSimpleRouter();
+  const [pathname, search] = path.split('?');
+  const jobIdParam = new URLSearchParams(search).get('job') || '';
   const { toasts, dismissToast } = useApp();
 
   // Search state to pass to Header and filter in EmployeeListView
@@ -29,7 +39,7 @@ function AppContent() {
 
   // Render active route
   const renderActiveView = () => {
-    switch (path) {
+    switch (pathname) {
       case '/':
         return <DashboardView onNavigate={navigate} />;
       case '/employees':
@@ -40,6 +50,17 @@ function AppContent() {
         return <LeaveRequestsView />;
       case '/tasks':
         return <TasksView />;
+      case '/careers':
+        return <CareersPage onNavigate={navigate} />;
+      case '/careers/apply':
+        return <ApplyPage jobId={jobIdParam} onNavigate={navigate} />;
+      case '/status':
+        return <StatusCheckPage />;
+      case '/recruitment/postings':
+        return <JobPostingsAdminPage />;
+      case '/recruitment/candidates':
+        return <CandidateDatabasePage />;
+
       default:
         // Handle employee detail route (/employees/:id)
         if (path.startsWith('/employees/') && params.id) {
@@ -95,7 +116,9 @@ function AppContent() {
 export default function App() {
   return (
     <AppProvider>
-      <AppContent />
+      <RecruitmentProvider>
+        <AppContent />
+      </RecruitmentProvider>
     </AppProvider>
   );
 }

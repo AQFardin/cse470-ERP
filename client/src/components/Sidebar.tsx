@@ -11,7 +11,9 @@ import {
   Building2,
   Lock,
   UserCheck,
-  X
+  X,
+  Briefcase,
+  UsersRound
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 
@@ -40,6 +42,8 @@ export default function Sidebar({
     { name: 'Employees', path: '/employees', icon: Users },
     { name: 'Leave Requests', path: '/leave-requests', icon: CalendarRange },
     { name: 'Tasks', path: '/tasks', icon: CheckSquare },
+    { name: 'Job Postings', path: '/recruitment/postings', icon: Briefcase },
+    { name: 'Candidates', path: '/recruitment/candidates', icon: UsersRound },
   ];
 
   if (isMobile) {
