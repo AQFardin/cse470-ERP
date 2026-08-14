@@ -16,6 +16,8 @@ import {
   createStockAdjustment,
   deleteStockAdjustment,
   getLowStockItems,
+  transferStock,
+  performStockTake,
 } from "../controllers/inventory.controller";
 
 const router = Router();
@@ -45,6 +47,13 @@ router.delete("/stock-movements/:id", deleteStockMovement);
 // ===================== LOW STOCK =====================
 
 router.get("/low-stock", getLowStockItems);
+// ===================== STOCK TRANSFER =====================
+
+router.post("/stock-transfers", transferStock);
+
+// ===================== STOCK TAKE =====================
+
+router.post("/stock-take", performStockTake);
 export default router;
 // ===================== STOCK ADJUSTMENTS =====================
 

@@ -2,6 +2,17 @@ import { Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
 
 const prisma = new PrismaClient();
+const getInventoryStatus = (quantity: number, reorderLevel: number) => {
+  if (quantity <= 0) {
+    return "OUT_OF_STOCK";
+  }
+
+  if (quantity <= reorderLevel) {
+    return "LOW_STOCK";
+  }
+
+  return "IN_STOCK";
+};
 
 // ===================== WAREHOUSE =====================
 
@@ -120,14 +131,14 @@ export const createInventoryItem = async (req: Request, res: Response) => {
     } = req.body;
 
     const item = await prisma.inventoryItem.create({
-      data: {
-        inventoryId,
-        variantId,
-        quantity,
-        reorderLevel,
-        status
-      }
-    });
+  data: {
+    inventoryId,
+    variantId,
+    quantity,
+    reorderLevel,
+    status: getInventoryStatus(quantity, reorderLevel)
+  }
+});
 
     res.status(201).json(item);
   } catch (err: any) {
@@ -247,14 +258,34 @@ export const createStockMovement = async (req: Request, res: Response) => {
     // Update inventory quantity
     const change = type === "IN" ? quantity : -quantity;
 
-    await prisma.inventoryItem.update({
-      where: { id: inventoryItemId },
-      data: {
-        quantity: {
-          increment: change
-        }
-      }
-    });
+    const item = await prisma.inventoryItem.findUnique({
+  where: { id: inventoryItemId }
+});
+
+if (!item) {
+  return res.status(404).json({
+    error: "Inventory item not found"
+  });
+}
+
+const newQuantity = item.quantity + change;
+
+if (newQuantity < 0) {
+  return res.status(400).json({
+    error: "Insufficient stock"
+  });
+}
+
+await prisma.inventoryItem.update({
+  where: { id: inventoryItemId },
+  data: {
+    quantity: newQuantity,
+    status: getInventoryStatus(
+      newQuantity,
+      item.reorderLevel
+    )
+  }
+});
 
     res.status(201).json(movement);
   } catch (err: any) {
@@ -291,6 +322,193 @@ export const getLowStockItems = async (req: Request, res: Response) => {
     );
 
     res.json(lowStockItems);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+};
+// ===================== STOCK TRANSFER =====================
+
+export const transferStock = async (req: Request, res: Response) => {
+  try {
+    const {
+      sourceInventoryItemId,
+      destinationInventoryItemId,
+      quantity
+    } = req.body;
+
+    if (!sourceInventoryItemId || !destinationInventoryItemId || !quantity) {
+      return res.status(400).json({
+        error: "sourceInventoryItemId, destinationInventoryItemId and quantity are required"
+      });
+    }
+
+    if (quantity <= 0) {
+      return res.status(400).json({
+        error: "Quantity must be greater than 0"
+      });
+    }
+
+    const sourceItem = await prisma.inventoryItem.findUnique({
+      where: { id: sourceInventoryItemId },
+      include: {
+        inventory: true,
+        variant: true
+      }
+    });
+
+    const destinationItem = await prisma.inventoryItem.findUnique({
+      where: { id: destinationInventoryItemId },
+      include: {
+        inventory: true,
+        variant: true
+      }
+    });
+
+    if (!sourceItem || !destinationItem) {
+      return res.status(404).json({
+        error: "Source or destination inventory item not found"
+      });
+    }
+
+    if (sourceItem.quantity < quantity) {
+      return res.status(400).json({
+        error: "Insufficient stock"
+      });
+    }
+
+    if (sourceItem.variantId !== destinationItem.variantId) {
+      return res.status(400).json({
+        error: "Source and destination items must use the same product variant"
+      });
+    }
+
+    if (sourceItem.inventoryId === destinationItem.inventoryId) {
+      return res.status(400).json({
+        error: "Source and destination must be different warehouses"
+      });
+    }
+
+    const result = await prisma.$transaction(async (tx) => {
+      const updatedSourceQuantity = sourceItem.quantity - quantity;
+
+const updatedSource = await tx.inventoryItem.update({
+  where: { id: sourceInventoryItemId },
+  data: {
+    quantity: updatedSourceQuantity,
+    status: getInventoryStatus(
+      updatedSourceQuantity,
+      sourceItem.reorderLevel
+    )
+  }
+});
+
+      const updatedDestinationQuantity = destinationItem.quantity + quantity;
+
+const updatedDestination = await tx.inventoryItem.update({
+  where: { id: destinationInventoryItemId },
+  data: {
+    quantity: updatedDestinationQuantity,
+    status: getInventoryStatus(
+      updatedDestinationQuantity,
+      destinationItem.reorderLevel
+    )
+  }
+});
+
+      await tx.stockMovement.create({
+        data: {
+          inventoryItemId: sourceInventoryItemId,
+          type: "OUT",
+          quantity
+        }
+      });
+
+      await tx.stockMovement.create({
+        data: {
+          inventoryItemId: destinationInventoryItemId,
+          type: "IN",
+          quantity
+        }
+      });
+
+      return {
+        source: updatedSource,
+        destination: updatedDestination
+      };
+    });
+
+    res.status(201).json(result);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+};
+// ===================== STOCK TAKE =====================
+
+export const performStockTake = async (req: Request, res: Response) => {
+  try {
+    const {
+      inventoryItemId,
+      countedQuantity,
+      employeeId,
+      reason
+    } = req.body;
+
+    if (
+      !inventoryItemId ||
+      countedQuantity === undefined ||
+      !employeeId
+    ) {
+      return res.status(400).json({
+        error: "inventoryItemId, countedQuantity and employeeId are required"
+      });
+    }
+
+    if (countedQuantity < 0) {
+      return res.status(400).json({
+        error: "Counted quantity cannot be negative"
+      });
+    }
+
+    const item = await prisma.inventoryItem.findUnique({
+      where: { id: inventoryItemId }
+    });
+
+    if (!item) {
+      return res.status(404).json({
+        error: "Inventory item not found"
+      });
+    }
+
+    const changedQuantity = countedQuantity - item.quantity;
+
+    const result = await prisma.$transaction(async (tx) => {
+      const updatedItem = await tx.inventoryItem.update({
+  where: { id: inventoryItemId },
+  data: {
+    quantity: countedQuantity,
+    status: getInventoryStatus(
+      countedQuantity,
+      item.reorderLevel
+    )
+  }
+});
+
+      const adjustment = await tx.stockAdjustment.create({
+        data: {
+          inventoryItemId,
+          employeeId,
+          reason: reason || "Stock take",
+          changedQuantity
+        }
+      });
+
+      return {
+        item: updatedItem,
+        adjustment
+      };
+    });
+
+    res.status(201).json(result);
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
