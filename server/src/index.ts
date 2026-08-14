@@ -6,6 +6,7 @@ import taskRoutes from './routes/tasks';
 import jobPostingRoutes from '../modules/recruitment/routes/jobPosting.routes';
 import applicantRoutes from '../modules/recruitment/routes/applicant.routes';
 import applicationRoutes from '../modules/recruitment/routes/application.routes';
+import inventoryRoutes from '../modules/inventory/routes/inventory.routes';
 import catalogRoutes from '../modules/catalog/routes/catalog.routes';
 import path from 'path';
 
@@ -32,6 +33,7 @@ app.use('/api/job-postings', jobPostingRoutes);
 app.use('/api/applicants', applicantRoutes);
 app.use('/api/applications', applicationRoutes);
 app.use('/api/catalog', catalogRoutes);
+app.use('/api/inventory', inventoryRoutes);
 app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 // ─── Start Server ───────────────────────────────────────
 app.listen(PORT, () => {
