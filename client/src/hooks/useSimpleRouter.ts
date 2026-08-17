@@ -1,46 +1,59 @@
-import { useState, useEffect } from 'react';
+import { useEffect, useState } from "react";
 
-// Simplified client-side router
 export interface RouterState {
   path: string;
   navigate: (newPath: string) => void;
   params: Record<string, string>;
 }
 
+function getCurrentPath(): string {
+  const hash = window.location.hash;
+
+  if (hash.startsWith("#/")) {
+    return hash.substring(1) || "/";
+  }
+
+  if (hash === "#") {
+    return "/";
+  }
+
+  return window.location.pathname || "/";
+}
+
 export function useSimpleRouter(): RouterState {
-  const [path, setPath] = useState<string>(() => {
-    // Read from window location path if it's there, or default to '/'
-    const hash = window.location.hash;
-    if (hash.startsWith('#')) {
-      return hash.substring(1) || '/';
-    }
-    return window.location.pathname || '/';
-  });
+  const [path, setPath] = useState<string>(getCurrentPath);
 
   const navigate = (newPath: string) => {
-    window.location.hash = newPath;
-    setPath(newPath);
+    // Make sure the path always starts with /
+    const normalizedPath = newPath.startsWith("/")
+      ? newPath
+      : `/${newPath}`;
+
+    // Update browser URL
+    window.location.hash = normalizedPath;
+
+    // Immediately update React state
+    setPath(normalizedPath);
   };
 
   useEffect(() => {
     const handleHashChange = () => {
-      const hash = window.location.hash;
-      if (hash.startsWith('#')) {
-        setPath(hash.substring(1) || '/');
-      } else {
-        setPath(window.location.pathname || '/');
-      }
+      setPath(getCurrentPath());
     };
 
-    window.addEventListener('hashchange', handleHashChange);
-    return () => window.removeEventListener('hashchange', handleHashChange);
+    window.addEventListener("hashchange", handleHashChange);
+
+    return () => {
+      window.removeEventListener("hashchange", handleHashChange);
+    };
   }, []);
 
-  // Parse parameters (e.g. /employees/:id -> /employees/EMP001)
   const params: Record<string, string> = {};
-  
-  if (path.startsWith('/employees/') && path !== '/employees/new') {
-    const parts = path.split('/');
+
+  // /employees/:id
+  if (path.startsWith("/employees/") && path !== "/employees/new") {
+    const parts = path.split("/");
+
     if (parts.length > 2) {
       params.id = parts[2];
     }

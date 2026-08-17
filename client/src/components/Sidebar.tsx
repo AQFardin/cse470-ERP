@@ -39,14 +39,21 @@ export default function Sidebar({
   const me = employees.find(e => e.id === currentEmployeeId);
 
   const navItems = [
-    { name: 'Dashboard', path: '/', icon: LayoutDashboard },
-    { name: 'Employees', path: '/employees', icon: Users },
-    { name: 'Leave Requests', path: '/leave-requests', icon: CalendarRange },
-    { name: 'Tasks', path: '/tasks', icon: CheckSquare },
-    { name: 'Job Postings', path: '/recruitment/postings', icon: Briefcase },
-    { name: 'Candidates', path: '/recruitment/candidates', icon: UsersRound },
-    { name: 'Product Catalog', path: '/catalog', icon: Package },
-  ];
+  { name: 'Dashboard', path: '/', icon: LayoutDashboard },
+  { name: 'Employees', path: '/employees', icon: Users },
+  { name: 'Leave Requests', path: '/leave-requests', icon: CalendarRange },
+  { name: 'Tasks', path: '/tasks', icon: CheckSquare },
+
+  { name: 'Inventory', path: '/inventory', icon: Package },
+  { name: 'Warehouses', path: '/inventory/warehouses', icon: Building2 },
+  { name: 'Inventory Items', path: '/inventory/items', icon: Package },
+  { name: 'Stock Transfers', path: '/inventory/transfers', icon: Package },
+  { name: 'Stock Take', path: '/inventory/stock-take', icon: CheckSquare },
+
+  { name: 'Job Postings', path: '/recruitment/postings', icon: Briefcase },
+  { name: 'Candidates', path: '/recruitment/candidates', icon: UsersRound },
+  { name: 'Product Catalog', path: '/catalog', icon: Package },
+];
 
   if (isMobile) {
     return (
