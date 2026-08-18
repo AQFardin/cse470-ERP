@@ -1,0 +1,19 @@
+import { Request, Response } from "express";
+export declare const getWarehouses: (req: Request, res: Response) => Promise<void>;
+export declare const createWarehouse: (req: Request, res: Response) => Promise<Response<any, Record<string, any>> | undefined>;
+export declare const deleteWarehouse: (req: Request, res: Response) => Promise<Response<any, Record<string, any>> | undefined>;
+export declare const getInventory: (req: Request, res: Response) => Promise<void>;
+export declare const createInventory: (req: Request, res: Response) => Promise<Response<any, Record<string, any>> | undefined>;
+export declare const getInventoryItems: (req: Request, res: Response) => Promise<void>;
+export declare const createInventoryItem: (req: Request, res: Response) => Promise<Response<any, Record<string, any>> | undefined>;
+export declare const deleteInventoryItem: (req: Request, res: Response) => Promise<Response<any, Record<string, any>> | undefined>;
+export declare const getStockMovements: (req: Request, res: Response) => Promise<void>;
+export declare const createStockMovement: (req: Request, res: Response) => Promise<Response<any, Record<string, any>> | undefined>;
+export declare const deleteStockMovement: (req: Request, res: Response) => Promise<Response<any, Record<string, any>> | undefined>;
+export declare const getStockAdjustments: (req: Request, res: Response) => Promise<void>;
+export declare const createStockAdjustment: (req: Request, res: Response) => Promise<Response<any, Record<string, any>> | undefined>;
+export declare const deleteStockAdjustment: (req: Request, res: Response) => Promise<Response<any, Record<string, any>> | undefined>;
+export declare const getLowStockItems: (req: Request, res: Response) => Promise<void>;
+export declare const transferStock: (req: Request, res: Response) => Promise<Response<any, Record<string, any>> | undefined>;
+export declare const performStockTake: (req: Request, res: Response) => Promise<Response<any, Record<string, any>> | undefined>;
+//# sourceMappingURL=inventory.controller.d.ts.map

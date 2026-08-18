@@ -8,6 +8,7 @@ import applicantRoutes from '../modules/recruitment/routes/applicant.routes';
 import applicationRoutes from '../modules/recruitment/routes/application.routes';
 import inventoryRoutes from '../modules/inventory/routes/inventory.routes';
 import catalogRoutes from '../modules/catalog/routes/catalog.routes';
+import notificationRoutes from "../modules/notifications/routes/notification.routes";
 import path from 'path';
 
 const app = express();
@@ -19,6 +20,7 @@ app.use(cors({
   credentials: true,
 }));
 app.use(express.json());
+app.use("/api/notifications", notificationRoutes);
 
 // ─── Health Check ───────────────────────────────────────
 app.get('/api/health', (_req, res) => {
