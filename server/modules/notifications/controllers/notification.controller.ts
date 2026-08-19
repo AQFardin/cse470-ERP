@@ -67,7 +67,7 @@ export async function markNotificationRead(req: Request, res: Response) {
 
 export async function getNotificationPreferences(req: Request, res: Response) {
   try {
-    const employeeId = String(req.query.employeeId || "");
+    const employeeId = String(req.params.employeeId || "");
 
     if (!employeeId) {
       return res.status(400).json({ error: "employeeId is required" });
