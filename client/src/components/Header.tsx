@@ -16,6 +16,8 @@ import { motion } from 'motion/react';
 import {
   fetchNotifications,
   markNotificationRead,
+  getPushPublicKey,
+  savePushSubscription,
   type Notification,
 } from '../lib/api';
 
@@ -60,7 +62,58 @@ export default function Header({
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [showNotifications, setShowNotifications] = useState(false);
   const [loadingNotifications, setLoadingNotifications] = useState(false);
+  useEffect(() => {
+  const setupPushNotifications = async () => {
+    if (!currentEmployeeId) return;
+    if (!("serviceWorker" in navigator)) return;
+    if (!("PushManager" in window)) return;
 
+    try {
+      const permission = await window.Notification.requestPermission();
+
+      if (permission !== "granted") return;
+
+      const registration = await navigator.serviceWorker.register("/sw.js");
+
+      let subscription = await registration.pushManager.getSubscription();
+
+      if (!subscription) {
+        const { publicKey } = await getPushPublicKey();
+
+        const padding = "=".repeat(
+          (4 - (publicKey.length % 4)) % 4
+        );
+
+        const base64 = (publicKey + padding)
+          .replace(/-/g, "+")
+          .replace(/_/g, "/");
+
+        const binary = window.atob(base64);
+        const key = new Uint8Array(binary.length);
+
+        for (let i = 0; i < binary.length; i++) {
+          key[i] = binary.charCodeAt(i);
+        }
+
+        subscription = await registration.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: key,
+        });
+      }
+
+      await savePushSubscription(
+        currentEmployeeId,
+        subscription
+      );
+
+      console.log("Push notifications enabled");
+    } catch (error) {
+      console.error("Push notification setup failed:", error);
+    }
+  };
+
+  setupPushNotifications();
+}, [currentEmployeeId]);
   const unreadCount = notifications.filter(
     (notification) => !notification.isRead
   ).length;

@@ -3,6 +3,11 @@ import InventoryView from "./components/InventoryView";
 import InventoryItemsView from "./components/InventoryItemsView";
 import WarehouseView from "./components/WarehouseView";
 import StockTransferView from "./components/StockTransferView";
+import ReportsView from "./components/ReportsView";
+import MessagesView from "./components/MessagesView";
+import CalendarView from "./components/CalendarView";
+import BOMPage from "./modules/manufacturing/pages/BOMPage";
+import ProductionOrderPage from "./modules/manufacturing/pages/ProductionOrderPage";
 
 import { useState } from "react";
 import { AppProvider, useApp } from "./context/AppContext";
@@ -37,6 +42,7 @@ import CatalogAdminPage from "./modules/catalog/pages/CatalogAdminPage";
 
 function AppContent() {
   const { path, navigate, params } = useSimpleRouter();
+  console.log("CURRENT ROUTER PATH:", path);
 
   const [pathname, search] = path.split("?");
   const jobIdParam = new URLSearchParams(search || "").get("job") || "";
@@ -69,6 +75,14 @@ function AppContent() {
 
       case "/tasks":
         return <TasksView />;
+        
+        case "/messages":
+  return <MessagesView />;
+  case "/calendar":
+  return <CalendarView />;
+
+        case "/reports":
+  return <ReportsView />;
 
       // =========================
       // INVENTORY
@@ -118,6 +132,11 @@ case "/inventory/stock-take":
 
       case "/catalog":
         return <CatalogPage onNavigate={navigate} />;
+        case "/manufacturing":
+  return <BOMPage />;
+
+case "/manufacturing/orders":
+  return <ProductionOrderPage />;
 
       case "/catalog/manage":
         return <CatalogAdminPage />;

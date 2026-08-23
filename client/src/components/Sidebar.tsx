@@ -43,7 +43,10 @@ export default function Sidebar({
   { name: 'Employees', path: '/employees', icon: Users },
   { name: 'Leave Requests', path: '/leave-requests', icon: CalendarRange },
   { name: 'Tasks', path: '/tasks', icon: CheckSquare },
+{ name: 'Reports', path: '/reports', icon: CheckSquare },
+{ name: 'Messages', path: '/messages', icon: CheckSquare },
 
+{ name: 'Calendar', path: '/calendar', icon: CalendarRange },
   { name: 'Inventory', path: '/inventory', icon: Package },
   { name: 'Warehouses', path: '/inventory/warehouses', icon: Building2 },
   { name: 'Inventory Items', path: '/inventory/items', icon: Package },
@@ -53,6 +56,8 @@ export default function Sidebar({
   { name: 'Job Postings', path: '/recruitment/postings', icon: Briefcase },
   { name: 'Candidates', path: '/recruitment/candidates', icon: UsersRound },
   { name: 'Product Catalog', path: '/catalog', icon: Package },
+  { name: 'Manufacturing', path: '/manufacturing', icon: Package },
+  { name: 'Production Orders', path: '/manufacturing/orders', icon: Package },
 ];
 
   if (isMobile) {

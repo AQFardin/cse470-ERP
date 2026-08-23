@@ -320,6 +320,22 @@ export async function markNotificationRead(
     method: 'PATCH',
   });
 }
+export async function getPushPublicKey(): Promise<{ publicKey: string }> {
+  return fetchJSON('/notifications/push/public-key');
+}
+
+export async function savePushSubscription(
+  employeeId: string,
+  subscription: PushSubscription
+) {
+  return fetchJSON('/notifications/push/subscribe', {
+    method: 'POST',
+    body: JSON.stringify({
+      employeeId,
+      subscription: subscription.toJSON(),
+    }),
+  });
+}
 
 export async function createNotification(data: {
   employeeId: string;

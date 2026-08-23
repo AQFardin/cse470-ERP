@@ -1,3 +1,5 @@
+import path from 'path';
+import dotenv from 'dotenv';
 import express from 'express';
 import cors from 'cors';
 import employeeRoutes from './routes/employees';
@@ -9,7 +11,15 @@ import applicationRoutes from '../modules/recruitment/routes/application.routes'
 import inventoryRoutes from '../modules/inventory/routes/inventory.routes';
 import catalogRoutes from '../modules/catalog/routes/catalog.routes';
 import notificationRoutes from "../modules/notifications/routes/notification.routes";
-import path from 'path';
+import reportRoutes from "../modules/reporting/routes/report.routes";
+import messageRoutes from "../modules/communication/routes/message.routes";
+import meetingRoutes from "../modules/communication/routes/meeting.routes";
+import bomRoutes from "../modules/manufacturing/routes/bom.routes";
+import productionOrderRoutes from "../modules/manufacturing/routes/productionOrder.routes";
+dotenv.config({
+  path: path.resolve(__dirname, '../../.env'),
+});
+  
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -36,6 +46,11 @@ app.use('/api/applicants', applicantRoutes);
 app.use('/api/applications', applicationRoutes);
 app.use('/api/catalog', catalogRoutes);
 app.use('/api/inventory', inventoryRoutes);
+app.use("/api/reports", reportRoutes);
+app.use("/api/messages", messageRoutes);
+app.use("/api/meetings", meetingRoutes);
+app.use("/api/boms", bomRoutes);
+app.use("/api/production-orders", productionOrderRoutes);
 app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 // ─── Start Server ───────────────────────────────────────
 app.listen(PORT, () => {

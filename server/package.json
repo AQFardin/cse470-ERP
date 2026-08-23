@@ -10,8 +10,13 @@
   "dependencies": {
     "@prisma/client": "^6.19.3",
     "cors": "^2.8.5",
+    "dotenv": "^17.4.2",
+    "exceljs": "^4.4.0",
     "express": "^5.1.0",
     "multer": "^2.2.0",
+    "nodemailer": "^9.0.5",
+    "pdfkit": "^0.19.1",
+    "web-push": "^3.6.7",
     "zod": "^3.24.0"
   },
   "devDependencies": {
@@ -19,6 +24,9 @@
     "@types/express": "^5.0.0",
     "@types/multer": "^2.2.0",
     "@types/node": "^22.10.0",
+    "@types/nodemailer": "^8.0.1",
+    "@types/pdfkit": "^0.17.6",
+    "@types/web-push": "^3.6.4",
     "prisma": "^6.19.3",
     "tsx": "^4.19.0",
     "typescript": "^5.7.0"

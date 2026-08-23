@@ -1,5 +1,5 @@
 import { Request, Response } from "express";
-import { PrismaClient } from "@prisma/client";
+import { Prisma, PrismaClient } from "@prisma/client";
 
 const prisma = new PrismaClient();
 
@@ -144,7 +144,7 @@ export const deleteWarehouse = async (
       },
     });
 
-    await prisma.$transaction(async (tx) => {
+    async (tx: Prisma.TransactionClient) => {
       for (const inventory of inventories) {
         const items = await tx.inventoryItem.findMany({
           where: {
@@ -155,7 +155,7 @@ export const deleteWarehouse = async (
           },
         });
 
-        const itemIds = items.map((item) => item.id);
+       const itemIds = items.map((item: any) => item.id);
 
         if (itemIds.length > 0) {
           await tx.stockMovement.deleteMany({
@@ -195,7 +195,7 @@ export const deleteWarehouse = async (
           id,
         },
       });
-    });
+    };
 
     res.status(204).send();
   } catch (err: any) {
@@ -448,7 +448,7 @@ export const deleteInventoryItem = async (
      * This fixes the "Failed to delete inventory item" error
      * caused by foreign-key constraints.
      */
-    await prisma.$transaction(async (tx) => {
+    async (tx: Prisma.TransactionClient) => {
       await tx.stockMovement.deleteMany({
         where: {
           inventoryItemId: id,
@@ -466,7 +466,7 @@ export const deleteInventoryItem = async (
           id,
         },
       });
-    });
+    };
 
     res.status(204).send();
   } catch (err: any) {
@@ -582,7 +582,7 @@ export const createStockMovement = async (
     const newQuantity = item.quantity + change;
 
     const result = await prisma.$transaction(
-      async (tx) => {
+      async (tx: Prisma.TransactionClient) => {
         const movement = await tx.stockMovement.create({
           data: {
             inventoryItemId,
@@ -686,7 +686,7 @@ export const deleteStockMovement = async (
       });
     }
 
-    await prisma.$transaction(async (tx) => {
+    await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       await tx.inventoryItem.update({
         where: {
           id: item.id,
@@ -811,7 +811,7 @@ export const createStockAdjustment = async (
     }
 
     const result = await prisma.$transaction(
-      async (tx) => {
+      async (tx: Prisma.TransactionClient) => {
         const adjustment =
           await tx.stockAdjustment.create({
             data: {
@@ -901,7 +901,7 @@ export const deleteStockAdjustment = async (
       });
     }
 
-    await prisma.$transaction(async (tx) => {
+    await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       await tx.inventoryItem.update({
         where: {
           id: item.id,
@@ -947,10 +947,10 @@ export const getLowStockItems = async (
         variant: true,
       },
     });
-
     const lowStockItems = items.filter(
-      (item) => item.quantity <= item.reorderLevel
-    );
+  (item: any) => item.quantity <= item.reorderLevel
+);
+    
 
     res.json(lowStockItems);
   } catch (err: any) {
@@ -1064,7 +1064,7 @@ export const transferStock = async (
     }
 
     const result = await prisma.$transaction(
-      async (tx) => {
+      async (tx: Prisma.TransactionClient) => {
         const updatedSourceQuantity =
           sourceItem.quantity - quantity;
 
@@ -1187,7 +1187,7 @@ export const performStockTake = async (
       countedQuantity - item.quantity;
 
     const result = await prisma.$transaction(
-      async (tx) => {
+      async (tx: Prisma.TransactionClient) => {
         const updatedItem =
           await tx.inventoryItem.update({
             where: {

@@ -39,6 +39,9 @@ type Product = {
 export default function InventoryItemsView() {
   const [items, setItems] = useState<InventoryItem[]>([]);
   const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
+  const [inventories, setInventories] = useState<
+  { id: string; warehouseId: string }[]
+>([]);
   const [variants, setVariants] = useState<ProductVariant[]>([]);
 
   const [inventoryId, setInventoryId] = useState("");
@@ -48,52 +51,94 @@ export default function InventoryItemsView() {
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  
 
   async function loadData() {
-    try {
-      setLoading(true);
+  try {
+    setLoading(true);
 
-      const [
-        itemsResponse,
-        warehousesResponse,
-        productsResponse,
-      ] = await Promise.all([
-        fetch(`${API_BASE}/inventory-items`),
-        fetch(`${API_BASE}/warehouses`),
-        fetch(`${CATALOG_API}/products`),
-      ]);
+    const [
+  itemsResponse,
+  warehousesResponse,
+  productsResponse,
+  inventoriesResponse,
+] = await Promise.all([
+  fetch(`${API_BASE}/inventory-items`),
+  fetch(`${API_BASE}/warehouses`),
+  fetch(`${CATALOG_API}/products`),
+  fetch(`${API_BASE}/inventory`),
+]);
 
-      if (
-        !itemsResponse.ok ||
-        !warehousesResponse.ok ||
-        !productsResponse.ok
-      ) {
-        throw new Error("Failed to load inventory data");
-      }
+    if (
+      !itemsResponse.ok ||
+      !warehousesResponse.ok ||
+      !productsResponse.ok
+    ) {
+      throw new Error("Failed to load inventory data");
+    }
 
-      const itemsData: InventoryItem[] = await itemsResponse.json();
-      const warehousesData: Warehouse[] =
-        await warehousesResponse.json();
-      const productsData: Product[] =
-        await productsResponse.json();
+    const itemsData: InventoryItem[] =
+      await itemsResponse.json();
 
-      const allVariants = productsData.flatMap((product) =>
+    const warehousesData: Warehouse[] =
+      await warehousesResponse.json();
+
+    const productsData: Product[] =
+      await productsResponse.json();
+
+    // Make sure every warehouse has an Inventory record.
+    await Promise.all(
+      warehousesData.map(async (warehouse) => {
+        const response = await fetch(
+          `${API_BASE}/inventory`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              warehouseId: warehouse.id,
+            }),
+          }
+        );
+
+        if (!response.ok) {
+          console.error(
+            `Failed to initialize inventory for ${warehouse.name}`
+          );
+        }
+      })
+    );
+
+    // Reload inventory items after ensuring all
+    // warehouse inventory records exist.
+    const refreshedItemsResponse = await fetch(
+      `${API_BASE}/inventory-items`
+    );
+
+    const refreshedItems: InventoryItem[] =
+      refreshedItemsResponse.ok
+        ? await refreshedItemsResponse.json()
+        : itemsData;
+
+    const allVariants = productsData.flatMap(
+      (product) =>
         product.variants.map((variant) => ({
           ...variant,
           productId: product.id,
           variantName: `${product.name} — ${variant.variantName}`,
         }))
-      );
+    );
 
-      setItems(itemsData);
-      setWarehouses(warehousesData);
-      setVariants(allVariants);
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setLoading(false);
-    }
+    setItems(refreshedItems);
+    setWarehouses(warehousesData);
+    setVariants(allVariants);
+  } catch (err) {
+    console.error(err);
+  } finally {
+    setLoading(false);
   }
+}
 
   useEffect(() => {
     loadData();
@@ -196,9 +241,7 @@ export default function InventoryItemsView() {
     );
   }
 
-  const inventoryIds = Array.from(
-    new Set(items.map((item) => item.inventoryId))
-  );
+  
 
   return (
     <div className="p-6 max-w-6xl mx-auto">
@@ -260,11 +303,21 @@ export default function InventoryItemsView() {
               Select warehouse
             </option>
 
-            {inventoryIds.map((id) => (
-              <option key={id} value={id}>
-                {inventoryLabel(id)}
-              </option>
-            ))}
+            {warehouses.map((warehouse) => {
+  const inventory = items.find(
+    (item) =>
+      item.inventory?.warehouseId === warehouse.id
+  );
+
+  return (
+    <option
+      key={warehouse.id}
+      value={inventory?.inventoryId || ""}
+    >
+      {warehouse.name}
+    </option>
+  );
+})}
           </select>
         </div>
 

@@ -30,8 +30,8 @@ router.delete("/warehouses/:id", deleteWarehouse);
 
 // ===================== INVENTORY =====================
 
-router.get("/inventory", getInventory);
-router.post("/inventory", createInventory);
+router.get("/", getInventory);
+router.post("/", createInventory);
 
 // ===================== INVENTORY ITEMS =====================
 
