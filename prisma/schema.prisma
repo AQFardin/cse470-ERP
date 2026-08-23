@@ -83,6 +83,8 @@ model Employee {
   createdTasks   TaskAssignment[] @relation("CreatedTasks")
   postedJobs    JobPosting[]               @relation("PostedJobs")
   statusChanges ApplicationStatusHistory[]  @relation("StatusChanges")
+  salesPipelines SalesPipeline[] @relation("SalesPipelines")
+  salesReports   SalesReport[]   @relation("SalesReports")
   @@map("employees")
 }
 
@@ -274,7 +276,7 @@ model SKU {
 
   variantId String         @map("variant_id")
   variant   ProductVariant @relation(fields: [variantId], references: [id], onDelete: Cascade)
-
+  orderItems OrderItem[]
   @@map("skus")
 }
 
@@ -305,7 +307,7 @@ model ProductBundle {
   @@map("product_bundles")
 }
 
-// Join table: a bundle contains many products, a product can be in many bundles
+
 model BundleProduct {
   id       String        @id @default(uuid())
   bundleId String        @map("bundle_id")
@@ -318,3 +320,279 @@ model BundleProduct {
 }
 
 // ========== End Product & Item Catalog module ========== 
+
+// ========== CRM module ==========
+
+enum LeadSource {
+  WEBSITE
+  REFERRAL
+  COLD_CALL
+  SOCIAL_MEDIA
+  EVENT
+  OTHER
+}
+
+enum LeadStatus {
+  NEW
+  CONTACTED
+  QUALIFIED
+  LOST
+  CONVERTED
+}
+
+enum PipelineStage {
+  PROSPECTING
+  QUALIFICATION
+  PROPOSAL
+  NEGOTIATION
+  CLOSED_WON
+  CLOSED_LOST
+}
+
+enum InteractionType {
+  CALL
+  EMAIL
+  MEETING
+  NOTE
+}
+
+model Customer {
+  id         String   @id @default(uuid())
+  customerId String   @unique @map("customer_id")
+  name       String
+  email      String   @unique
+  phone      String?
+  address    String?
+
+  interactions InteractionHistory[]
+  pipelines    SalesPipeline[]
+  convertedFromLead Lead?
+  subscriptions Subscription[]
+  orders         Order[]
+  returnRequests ReturnRequest[]
+
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  @@map("customers")
+}
+
+model Lead {
+  id                String     @id @default(uuid())
+  leadId            String     @unique @map("lead_id")
+  name              String
+  email             String
+  source            LeadSource
+  qualificationStat LeadStatus @default(NEW) @map("qualification_stat")
+  score             Int        @default(0)
+
+  convertedCustomerId String?   @unique @map("converted_customer_id")
+  convertedCustomer   Customer? @relation(fields: [convertedCustomerId], references: [id])
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("leads")
+}
+
+model SalesPipeline {
+  id                String        @id @default(uuid())
+  pipelineId        String        @unique @map("pipeline_id")
+  stage             PipelineStage @default(PROSPECTING)
+  dealValue         Decimal       @map("deal_value")
+  expectedCloseDate DateTime      @map("expected_close_date")
+
+  customerId String   @map("customer_id")
+  customer   Customer @relation(fields: [customerId], references: [id])
+
+  employeeId String   @map("employee_id")
+  employee   Employee @relation("SalesPipelines", fields: [employeeId], references: [id])
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("sales_pipelines")
+}
+
+model InteractionHistory {
+  id            String           @id @default(uuid())
+  interactionId String           @unique @map("interaction_id")
+  date          DateTime
+  type          InteractionType
+  notes         String?
+
+  customerId String   @map("customer_id")
+  customer   Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@map("interaction_histories")
+}
+
+model SalesReport {
+  id         String   @id @default(uuid())
+  reportId   String   @unique @map("report_id")
+  period     String   // e.g. "2026-Q3", "2026-08"
+  region     String
+  revenue    Decimal  @default(0)
+  dealsClosed Int     @default(0) @map("deals_closed")
+  dealsLost   Int     @default(0) @map("deals_lost")
+
+  employeeId String   @map("employee_id")
+  employee   Employee @relation("SalesReports", fields: [employeeId], references: [id])
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("sales_reports")
+}
+
+// ========== End CRM module ==========
+
+
+// ========== Subscription & Membership Management module ==========
+
+model MembershipPlan {
+  id                  String   @id @default(uuid())
+  name                String
+  tier                String
+  price               Decimal
+  billingIntervalDays Int      @default(30) @map("billing_interval_days")
+
+  subscriptions       Subscription[]
+
+  @@map("membership_plans")
+}
+
+model Subscription {
+  id         String   @id @default(uuid())
+  startDate  DateTime @map("start_date")
+  status     String   @default("ACTIVE") // ACTIVE, CANCELLED, PAST_DUE, EXPIRED
+  autoRenew  Boolean  @default(true) @map("auto_renew")
+
+  customerId String   @map("customer_id")
+  customer   Customer @relation(fields: [customerId], references: [id])
+
+  planId     String         @map("plan_id")
+  plan       MembershipPlan @relation(fields: [planId], references: [id])
+
+  billingCycles  BillingCycle[]
+  renewalNotices RenewalNotice[]
+  planChanges    SubscriptionPlanChange[]
+
+  @@map("subscriptions")
+}
+
+model BillingCycle {
+  id          String   @id @default(uuid())
+  billingDate DateTime @map("billing_date")
+  amount      Decimal
+  status      String   @default("PENDING") // PENDING, PAID, FAILED
+
+  subscriptionId String       @map("subscription_id")
+  subscription   Subscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+
+  @@map("billing_cycles")
+}
+
+model RenewalNotice {
+  id          String   @id @default(uuid())
+  noticeType  String   @map("notice_type") // UPCOMING_RENEWAL, PAYMENT_FAILURE
+  sentDate    DateTime @map("sent_date")
+  renewalDate DateTime @map("renewal_date")
+
+  subscriptionId String       @map("subscription_id")
+  subscription   Subscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+
+  @@map("renewal_notices")
+}
+
+model SubscriptionPlanChange {
+  id             String   @id @default(uuid())
+  changeDate     DateTime @default(now()) @map("change_date")
+  fromPlanId     String?  @map("from_plan_id")
+  toPlanId       String   @map("to_plan_id")
+  proratedAmount Decimal  @map("prorated_amount")
+
+  subscriptionId String       @map("subscription_id")
+  subscription   Subscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+
+  @@map("subscription_plan_changes")
+}
+
+// ========== End Subscription & Membership Management module ==========
+
+// ========== Returns & Refunds Management module ==========
+
+model Order {
+  id          String   @id @default(uuid())
+  orderDate   DateTime @default(now()) @map("order_date")
+  totalAmount Decimal  @map("total_amount")
+
+  customerId  String   @map("customer_id")
+  customer    Customer @relation(fields: [customerId], references: [id])
+
+  items          OrderItem[]
+  returnRequests ReturnRequest[]
+
+  @@map("orders")
+}
+
+model OrderItem {
+  id       String  @id @default(uuid())
+  quantity Int
+  price    Decimal
+
+  orderId  String  @map("order_id")
+  order    Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  skuId    String  @map("sku_id")
+  sku      SKU     @relation(fields: [skuId], references: [id])
+
+  returnRequests ReturnRequest[]
+
+  @@map("order_items")
+}
+
+model ReturnRequest {
+  id      String   @id @default(uuid())
+  reason  String
+  status  String   @default("PENDING") // PENDING, APPROVED, REJECTED
+  reqDate DateTime @default(now()) @map("req_date")
+
+  customerId String   @map("customer_id")
+  customer   Customer @relation(fields: [customerId], references: [id])
+
+  orderId    String   @map("order_id")
+  order      Order    @relation(fields: [orderId], references: [id])
+
+  orderItemId String    @map("order_item_id")
+  orderItem   OrderItem @relation(fields: [orderItemId], references: [id])
+
+  refundTransaction RefundTransaction?
+  creditNote        CreditNote?
+
+  @@map("return_requests")
+}
+
+model RefundTransaction {
+  id         String   @id @default(uuid())
+  amount     Decimal
+  refundDate DateTime @default(now()) @map("refund_date")
+  method     String   @default("ORIGINAL_PAYMENT")
+
+  returnRequestId String        @unique @map("return_request_id")
+  returnRequest   ReturnRequest @relation(fields: [returnRequestId], references: [id], onDelete: Cascade)
+
+  @@map("refund_transactions")
+}
+
+model CreditNote {
+  id        String   @id @default(uuid())
+  amount    Decimal
+  issueDate DateTime @default(now()) @map("issue_date")
+
+  returnRequestId String        @unique @map("return_request_id")
+  returnRequest   ReturnRequest @relation(fields: [returnRequestId], references: [id], onDelete: Cascade)
+
+  @@map("credit_notes")
+}
+
+// ========== End Returns & Refunds Management module ==========

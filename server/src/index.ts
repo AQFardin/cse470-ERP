@@ -7,6 +7,9 @@ import jobPostingRoutes from '../modules/recruitment/routes/jobPosting.routes';
 import applicantRoutes from '../modules/recruitment/routes/applicant.routes';
 import applicationRoutes from '../modules/recruitment/routes/application.routes';
 import catalogRoutes from '../modules/catalog/routes/catalog.routes';
+import crmRoutes from '../modules/crm/routes/crm.routes';
+import subscriptionRoutes from '../modules/subscription/routes/subscription.routes';
+import returnsRoutes from '../modules/returns/routes/returns.routes';
 import path from 'path';
 
 const app = express();
@@ -33,6 +36,9 @@ app.use('/api/applicants', applicantRoutes);
 app.use('/api/applications', applicationRoutes);
 app.use('/api/catalog', catalogRoutes);
 app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
+app.use('/api/crm', crmRoutes);
+app.use('/api/subscriptions', subscriptionRoutes);
+app.use('/api/returns', returnsRoutes);
 // ─── Start Server ───────────────────────────────────────
 app.listen(PORT, () => {
   console.log(`\n🚀 ERP Server running on http://localhost:${PORT}`);
@@ -40,6 +46,7 @@ app.listen(PORT, () => {
   console.log(`   Employees:     http://localhost:${PORT}/api/employees`);
   console.log(`   Leave Requests: http://localhost:${PORT}/api/leave-requests`);
   console.log(`   Tasks:         http://localhost:${PORT}/api/tasks\n`);
+  console.log(`   CRM:           http://localhost:${PORT}/api/crm\n`);
   console.log(`   Catalog:       http://localhost:${PORT}/api/catalog/products\n`);
 });
 

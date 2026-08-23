@@ -28,6 +28,19 @@ import CatalogPage from './modules/catalog/pages/CatalogPage';
 import ProductDetailPage from './modules/catalog/pages/ProductDetailPage';
 import CatalogAdminPage from './modules/catalog/pages/CatalogAdminPage';
 
+
+//CRM
+import { CrmProvider } from './modules/crm/context/CrmContext';
+import CrmPage from './modules/crm/pages/CrmPage';
+
+//Membership and subscription
+
+import { SubscriptionProvider } from './modules/subscription/context/SubscriptionContext';
+import SubscriptionsPage from './modules/subscription/pages/SubscriptionsPage';
+//Refunds and returns
+import { ReturnsProvider } from './modules/returns/context/ReturnsContext';
+import ReturnsPage from './modules/returns/pages/ReturnsPage';
+
 function AppContent() {
   const { path, navigate, params } = useSimpleRouter();
   const [pathname, search] = path.split('?');
@@ -70,6 +83,12 @@ function AppContent() {
         return <CatalogPage onNavigate={navigate} />;
       case '/catalog/manage':
         return <CatalogAdminPage />;
+            case '/crm':
+        return <CrmPage />;
+      case '/subscriptions':
+        return <SubscriptionsPage />;
+            case '/returns':
+        return <ReturnsPage />;
       default:
         // Handle employee detail route (/employees/:id)
         if (path.startsWith('/employees/') && params.id) {
@@ -129,10 +148,16 @@ function AppContent() {
 
 export default function App() {
   return (
-  <AppProvider>
+     <AppProvider>
       <RecruitmentProvider>
         <CatalogProvider>
-          <AppContent />
+          <CrmProvider>
+            <SubscriptionProvider>
+               <ReturnsProvider>
+              <AppContent />
+              </ReturnsProvider>
+            </SubscriptionProvider>
+          </CrmProvider>
         </CatalogProvider>
       </RecruitmentProvider>
     </AppProvider>

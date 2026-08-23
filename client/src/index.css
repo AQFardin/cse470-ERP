@@ -22,3 +22,7 @@
 ::-webkit-scrollbar-thumb:hover {
   background: #cbd5e1;
 }
+
+.input {
+  @apply px-3 py-2.5 text-sm border border-gray-200 rounded-lg text-gray-800 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400 transition-colors;
+}

@@ -15,6 +15,9 @@ import {
   Briefcase,
   UsersRound,
   Package,
+  Contact,
+  CreditCard,
+  RotateCcw,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 
@@ -46,6 +49,9 @@ export default function Sidebar({
     { name: 'Job Postings', path: '/recruitment/postings', icon: Briefcase },
     { name: 'Candidates', path: '/recruitment/candidates', icon: UsersRound },
     { name: 'Product Catalog', path: '/catalog', icon: Package },
+    { name: 'CRM', path: '/crm', icon: Contact },
+    { name: 'Subscriptions', path: '/subscriptions', icon: CreditCard },
+    { name: 'Returns & Refunds', path: '/returns', icon: RotateCcw },
   ];
 
   if (isMobile) {
