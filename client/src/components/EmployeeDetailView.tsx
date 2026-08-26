@@ -29,12 +29,13 @@ export default function EmployeeDetailView({ id, onNavigate }: EmployeeDetailVie
   const { 
     employees, 
     departments, 
-    currentUserRole, 
+    hasPermission, 
     updateEmployee, 
     deactivateEmployee,
     leaveRequests,
     tasks
   } = useApp();
+  const canEdit = hasPermission('employee_records', 'edit');
 
   const employee = employees.find(e => e.id === id);
 
@@ -127,7 +128,7 @@ export default function EmployeeDetailView({ id, onNavigate }: EmployeeDetailVie
         
         {/* Actions */}
         <div className="flex items-center gap-2">
-          {currentUserRole === 'manager' && (
+          {canEdit && (
             <>
               <button
                 onClick={() => deactivateEmployee(employee.id, employee.status)}
@@ -184,10 +185,10 @@ export default function EmployeeDetailView({ id, onNavigate }: EmployeeDetailVie
           </div>
 
           <div className="pt-7 p-6 space-y-6">
-            {currentUserRole !== 'manager' && (
+            {!canEdit && (
               <div className="p-3 bg-indigo-50 border border-indigo-100 rounded-xl flex items-center gap-2 text-xs text-indigo-700">
                 <Lock className="w-4 h-4 shrink-0 text-indigo-500" />
-                <span>You are currently in <strong>Employee View</strong>. Record changes can only be persisted by a Manager.</span>
+                <span>You are currently in <strong>Read-Only View</strong>. Record changes can only be persisted by HR or authorized administrators.</span>
               </div>
             )}
 
@@ -199,7 +200,7 @@ export default function EmployeeDetailView({ id, onNavigate }: EmployeeDetailVie
                   type="text"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  disabled={currentUserRole !== 'manager'}
+                  disabled={!canEdit}
                   className={`w-full px-4 py-2.5 bg-gray-50/50 border rounded-xl text-xs transition-all ${
                     errors.name ? 'border-rose-300 focus:ring-rose-200' : 'border-gray-200 focus:ring-indigo-100'
                   } disabled:opacity-75 disabled:bg-gray-50`}
@@ -215,7 +216,7 @@ export default function EmployeeDetailView({ id, onNavigate }: EmployeeDetailVie
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  disabled={currentUserRole !== 'manager'}
+                  disabled={!canEdit}
                   className={`w-full px-4 py-2.5 bg-gray-50/50 border rounded-xl text-xs transition-all ${
                     errors.email ? 'border-rose-300 focus:ring-rose-200' : 'border-gray-200 focus:ring-indigo-100'
                   } disabled:opacity-75 disabled:bg-gray-50`}
@@ -231,7 +232,7 @@ export default function EmployeeDetailView({ id, onNavigate }: EmployeeDetailVie
                   type="text"
                   value={phone}
                   onChange={(e) => setPhone(e.target.value)}
-                  disabled={currentUserRole !== 'manager'}
+                  disabled={!canEdit}
                   className="w-full px-4 py-2.5 bg-gray-50/50 border border-gray-200 rounded-xl text-xs focus:outline-hidden focus:ring-1 focus:ring-indigo-500 disabled:opacity-75 disabled:bg-gray-50"
                   placeholder="+1 (555) 000-0000"
                 />
@@ -244,7 +245,7 @@ export default function EmployeeDetailView({ id, onNavigate }: EmployeeDetailVie
                   type="text"
                   value={address}
                   onChange={(e) => setAddress(e.target.value)}
-                  disabled={currentUserRole !== 'manager'}
+                  disabled={!canEdit}
                   className="w-full px-4 py-2.5 bg-gray-50/50 border border-gray-200 rounded-xl text-xs focus:outline-hidden focus:ring-1 focus:ring-indigo-500 disabled:opacity-75 disabled:bg-gray-50"
                   placeholder="Address Line, City, State"
                 />
@@ -257,7 +258,7 @@ export default function EmployeeDetailView({ id, onNavigate }: EmployeeDetailVie
                   type="text"
                   value={role}
                   onChange={(e) => setRole(e.target.value)}
-                  disabled={currentUserRole !== 'manager'}
+                  disabled={!canEdit}
                   className={`w-full px-4 py-2.5 bg-gray-50/50 border rounded-xl text-xs transition-all ${
                     errors.role ? 'border-rose-300 focus:ring-rose-200' : 'border-gray-200 focus:ring-indigo-100'
                   } disabled:opacity-75 disabled:bg-gray-50`}
@@ -272,7 +273,7 @@ export default function EmployeeDetailView({ id, onNavigate }: EmployeeDetailVie
                 <select
                   value={departmentId}
                   onChange={(e) => setDepartmentId(e.target.value)}
-                  disabled={currentUserRole !== 'manager'}
+                  disabled={!canEdit}
                   className="w-full px-4 py-2.5 bg-gray-50/50 border border-gray-200 rounded-xl text-xs focus:outline-hidden focus:ring-1 focus:ring-indigo-500 cursor-pointer disabled:opacity-75 disabled:bg-gray-50"
                 >
                   {departments.map((dept) => (
@@ -290,7 +291,7 @@ export default function EmployeeDetailView({ id, onNavigate }: EmployeeDetailVie
                   type="number"
                   value={salary}
                   onChange={(e) => setSalary(Number(e.target.value))}
-                  disabled={currentUserRole !== 'manager'}
+                  disabled={!canEdit}
                   className={`w-full px-4 py-2.5 bg-gray-50/50 border rounded-xl text-xs transition-all ${
                     errors.salary ? 'border-rose-300 focus:ring-rose-200' : 'border-gray-200 focus:ring-indigo-100'
                   } disabled:opacity-75 disabled:bg-gray-50`}
@@ -306,7 +307,7 @@ export default function EmployeeDetailView({ id, onNavigate }: EmployeeDetailVie
                   type="date"
                   value={joiningDate}
                   onChange={(e) => setJoiningDate(e.target.value)}
-                  disabled={currentUserRole !== 'manager'}
+                  disabled={!canEdit}
                   className={`w-full px-4 py-2.5 bg-gray-50/50 border rounded-xl text-xs transition-all ${
                     errors.joiningDate ? 'border-rose-300 focus:ring-rose-200' : 'border-gray-200 focus:ring-indigo-100'
                   } disabled:opacity-75 disabled:bg-gray-50`}

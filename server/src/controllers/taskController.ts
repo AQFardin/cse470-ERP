@@ -1,11 +1,13 @@
 import { Request, Response } from 'express';
 import { prisma } from '../lib/prisma';
-import { TaskPriority, TaskStatus } from '@prisma/client';
+import { Role, TaskPriority, TaskStatus } from '@prisma/client';
+import { logAudit } from '../lib/auditLog';
+import { userHasPermission } from '../middleware/authorize';
 
 // ─── CREATE Task Assignment ─────────────────────────────
 export async function createTask(req: Request, res: Response) {
   try {
-    const { title, description, assignedToId, assignedById, priority, deadline } = req.body;
+    const { title, description, assignedToId, assignedById, priority, deadline, projectId, projectChunkId, milestone } = req.body;
 
     // Validate assigned employee exists
     const assignee = await prisma.employee.findUnique({
@@ -15,15 +17,52 @@ export async function createTask(req: Request, res: Response) {
       res.status(404).json({ success: false, error: 'Assigned employee not found' });
       return;
     }
+    
+    // Fetch the assigner
+    const assignerId = assignedById || req.currentUser!.employeeId!;
+    const assigner = await prisma.employee.findUnique({
+      where: { id: assignerId },
+    });
+    
+    if (!assigner) {
+      res.status(404).json({ success: false, error: 'Assigner not found' });
+      return;
+    }
+
+    // Check if the assigner is a Project Manager (cross-department role)
+    const userRoles = req.currentUser!.roles;
+    const isProjectManager = userRoles.includes('PROJECT_MANAGER');
+
+    // Project Managers cannot assign tasks to themselves
+    if (isProjectManager && assignerId === assignedToId) {
+      res.status(400).json({ success: false, error: 'Project Managers cannot assign tasks to themselves' });
+      return;
+    }
+
+    // Department managers: enforce same-department restriction
+    // Project managers: skip department check (they operate cross-department)
+    if (!isProjectManager && assigner.department !== assignee.department) {
+      res.status(403).json({ success: false, error: 'You can only assign tasks to employees in your own department' });
+      return;
+    }
+
+    // Enforce that tasks cannot be assigned to department managers
+    if (assignee.role === Role.MANAGER || assignee.position.toLowerCase().includes('manager')) {
+      res.status(400).json({ success: false, error: 'Tasks can only be assigned to regular team employees, not department managers' });
+      return;
+    }
 
     const task = await prisma.taskAssignment.create({
       data: {
         title,
         description,
         assignedToId,
-        assignedById,
+        assignedById: assignedById || req.currentUser!.employeeId!,
         priority: (priority as TaskPriority) || TaskPriority.MEDIUM,
         deadline: new Date(deadline),
+        projectId: projectId || null,
+        projectChunkId: projectChunkId || null,
+        milestone: milestone || null,
       },
       include: {
         assignedTo: {
@@ -45,6 +84,14 @@ export async function createTask(req: Request, res: Response) {
       },
     });
 
+    await logAudit({
+      actorId: req.currentUser!.id,
+      action: 'CREATE',
+      targetEntity: 'TaskAssignment',
+      targetId: task.id,
+      after: task,
+    });
+
     res.status(201).json({ success: true, data: task });
   } catch (error) {
     console.error('Create task error:', error);
@@ -52,10 +99,12 @@ export async function createTask(req: Request, res: Response) {
   }
 }
 
-// ─── GET ALL Tasks ──────────────────────────────────────
+// ─── GET ALL Tasks (role-scoped) ────────────────────────
 export async function getAllTasks(req: Request, res: Response) {
   try {
     const { status, priority, assignedToId } = req.query;
+    const userRoles = req.currentUser!.roles;
+    const currentEmployeeId = req.currentUser!.employeeId;
 
     const where: any = {};
     if (status && status !== 'ALL') {
@@ -66,6 +115,14 @@ export async function getAllTasks(req: Request, res: Response) {
     }
     if (assignedToId) {
       where.assignedToId = assignedToId as string;
+    }
+
+    // Role-based scoping
+    const canViewAll = await userHasPermission(userRoles, 'task', 'view_all');
+
+    if (!canViewAll && currentEmployeeId) {
+      // Employee: only own tasks
+      where.assignedToId = currentEmployeeId;
     }
 
     const tasks = await prisma.taskAssignment.findMany({
@@ -101,7 +158,7 @@ export async function getAllTasks(req: Request, res: Response) {
 // ─── GET Tasks for Employee ─────────────────────────────
 export async function getEmployeeTasks(req: Request, res: Response) {
   try {
-    const { id } = req.params;
+    const id = req.params.id as string;
 
     const tasks = await prisma.taskAssignment.findMany({
       where: { assignedToId: id },
@@ -126,8 +183,10 @@ export async function getEmployeeTasks(req: Request, res: Response) {
 // ─── UPDATE Task ────────────────────────────────────────
 export async function updateTask(req: Request, res: Response) {
   try {
-    const { id } = req.params;
+    const id = req.params.id as string;
     const { title, description, priority, status, deadline, assignedToId } = req.body;
+
+    const before = await prisma.taskAssignment.findUnique({ where: { id } });
 
     const task = await prisma.taskAssignment.update({
       where: { id },
@@ -159,6 +218,15 @@ export async function updateTask(req: Request, res: Response) {
       },
     });
 
+    await logAudit({
+      actorId: req.currentUser!.id,
+      action: 'UPDATE',
+      targetEntity: 'TaskAssignment',
+      targetId: id,
+      before,
+      after: task,
+    });
+
     res.json({ success: true, data: task });
   } catch (error: any) {
     if (error.code === 'P2025') {
@@ -173,9 +241,19 @@ export async function updateTask(req: Request, res: Response) {
 // ─── DELETE Task ────────────────────────────────────────
 export async function deleteTask(req: Request, res: Response) {
   try {
-    const { id } = req.params;
+    const id = req.params.id as string;
+
+    const before = await prisma.taskAssignment.findUnique({ where: { id } });
 
     await prisma.taskAssignment.delete({ where: { id } });
+
+    await logAudit({
+      actorId: req.currentUser!.id,
+      action: 'DELETE',
+      targetEntity: 'TaskAssignment',
+      targetId: id,
+      before,
+    });
 
     res.json({ success: true, message: 'Task deleted' });
   } catch (error: any) {

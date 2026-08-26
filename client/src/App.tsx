@@ -13,8 +13,14 @@ import EmployeeDetailView from './components/EmployeeDetailView';
 import AddEmployeeView from './components/AddEmployeeView';
 import LeaveRequestsView from './components/LeaveRequestsView';
 import TasksView from './components/TasksView';
+import AuditLogView from './components/AuditLogView';
+import OffboardingView from './components/OffboardingView';
+import LeaveBalanceView from './components/LeaveBalanceView';
+import AttendanceView from './components/AttendanceView';
+import HelpDeskView from './components/HelpDeskView';
+import ProjectView from './components/ProjectView';
 
-//Recruitment view
+// Recruitment module
 import { RecruitmentProvider } from './modules/recruitment/context/RecruitmentContext';
 import CareersPage from './modules/recruitment/pages/CareersPage';
 import ApplyPage from './modules/recruitment/pages/ApplyPage';
@@ -22,22 +28,21 @@ import StatusCheckPage from './modules/recruitment/pages/StatusCheckPage';
 import JobPostingsAdminPage from './modules/recruitment/pages/JobPostingsAdminPage';
 import CandidateDatabasePage from './modules/recruitment/pages/CandidateDatabasePage';
 
-//products catalog 
+// Product Catalog module
 import { CatalogProvider } from './modules/catalog/context/CatalogContext';
 import CatalogPage from './modules/catalog/pages/CatalogPage';
 import ProductDetailPage from './modules/catalog/pages/ProductDetailPage';
 import CatalogAdminPage from './modules/catalog/pages/CatalogAdminPage';
 
-
-//CRM
+// CRM module
 import { CrmProvider } from './modules/crm/context/CrmContext';
 import CrmPage from './modules/crm/pages/CrmPage';
 
-//Membership and subscription
-
+// Membership & Subscription module
 import { SubscriptionProvider } from './modules/subscription/context/SubscriptionContext';
 import SubscriptionsPage from './modules/subscription/pages/SubscriptionsPage';
-//Refunds and returns
+
+// Returns & Refunds module
 import { ReturnsProvider } from './modules/returns/context/ReturnsContext';
 import ReturnsPage from './modules/returns/pages/ReturnsPage';
 
@@ -69,6 +74,19 @@ function AppContent() {
         return <LeaveRequestsView />;
       case '/tasks':
         return <TasksView />;
+      case '/audit-logs':
+        return <AuditLogView />;
+      case '/offboarding':
+        return <OffboardingView />;
+      case '/leave-balances':
+        return <LeaveBalanceView />;
+      case '/attendance':
+        return <AttendanceView />;
+      case '/help-desk':
+        return <HelpDeskView />;
+      case '/projects':
+        return <ProjectView />;
+      // ─── Recruitment routes ─────────────────────────────
       case '/careers':
         return <CareersPage onNavigate={navigate} />;
       case '/careers/apply':
@@ -79,15 +97,19 @@ function AppContent() {
         return <JobPostingsAdminPage />;
       case '/recruitment/candidates':
         return <CandidateDatabasePage />;
+      // ─── Catalog routes ─────────────────────────────────
       case '/catalog':
         return <CatalogPage onNavigate={navigate} />;
       case '/catalog/manage':
         return <CatalogAdminPage />;
-            case '/crm':
+      // ─── CRM routes ────────────────────────────────────
+      case '/crm':
         return <CrmPage />;
+      // ─── Subscription routes ────────────────────────────
       case '/subscriptions':
         return <SubscriptionsPage />;
-            case '/returns':
+      // ─── Returns routes ─────────────────────────────────
+      case '/returns':
         return <ReturnsPage />;
       default:
         // Handle employee detail route (/employees/:id)
@@ -98,7 +120,7 @@ function AppContent() {
           const productId = pathname.split('/')[2];
           return <ProductDetailPage productId={productId} onNavigate={navigate} />;
         }
-        
+
         return <DashboardView onNavigate={navigate} />;
     }
   };
@@ -106,12 +128,12 @@ function AppContent() {
   return (
     <div className="flex w-screen h-screen overflow-hidden bg-white text-gray-800 relative">
       {/* Mobile slide-out drawer */}
-      <Sidebar 
-        currentPath={path} 
+      <Sidebar
+        currentPath={path}
         onNavigate={(targetPath) => {
           navigate(targetPath);
           setMobileSidebarOpen(false);
-        }} 
+        }}
         isMobile={true}
         isOpen={mobileSidebarOpen}
         onClose={() => setMobileSidebarOpen(false)}
@@ -122,12 +144,12 @@ function AppContent() {
 
       {/* Right main workspace layout */}
       <div className="flex-1 flex flex-col overflow-hidden bg-gray-50/20">
-        
+
         {/* Header toolbar */}
-        <Header 
-          searchQuery={searchQuery} 
-          setSearchQuery={setSearchQuery} 
-          showSearch={showSearch} 
+        <Header
+          searchQuery={searchQuery}
+          setSearchQuery={setSearchQuery}
+          showSearch={showSearch}
           onMenuToggle={() => setMobileSidebarOpen(prev => !prev)}
         />
 
@@ -148,13 +170,13 @@ function AppContent() {
 
 export default function App() {
   return (
-     <AppProvider>
+    <AppProvider>
       <RecruitmentProvider>
         <CatalogProvider>
           <CrmProvider>
             <SubscriptionProvider>
-               <ReturnsProvider>
-              <AppContent />
+              <ReturnsProvider>
+                <AppContent />
               </ReturnsProvider>
             </SubscriptionProvider>
           </CrmProvider>

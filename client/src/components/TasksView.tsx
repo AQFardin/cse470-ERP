@@ -17,14 +17,15 @@ import type { Task } from '../types';
 
 export default function TasksView() {
   const { 
-    currentUserRole, 
     tasks, 
     addTask, 
     updateTaskStatus, 
     deleteTask, 
     employees, 
-    currentEmployeeId 
+    currentEmployeeId,
+    hasPermission
   } = useApp();
+  const canCreateTask = hasPermission('task', 'create');
 
   // Task creation form state (manager only)
   const [title, setTitle] = useState('');
@@ -34,21 +35,39 @@ export default function TasksView() {
   const [deadline, setDeadline] = useState('');
   const [formError, setFormError] = useState('');
 
+  // Find current manager's department
+  const currentManagerEmp = useMemo(() => {
+    return employees.find(e => e.id === currentEmployeeId);
+  }, [employees, currentEmployeeId]);
+
+  // Eligible assignees: employees in manager's department (EXCLUDING managers)
+  const departmentEmployees = useMemo(() => {
+    if (!currentManagerEmp) return [];
+    return employees.filter(emp => {
+      const isManager = 
+        emp.systemRole === 'MANAGER' || 
+        emp.role.toLowerCase().includes('manager');
+      return emp.departmentId === currentManagerEmp.departmentId && !isManager;
+    });
+  }, [employees, currentManagerEmp]);
+
   // Default dropdown selection
   React.useEffect(() => {
-    if (employees.length > 0 && !assignedEmployeeId) {
-      setAssignedEmployeeId(employees[0].id);
+    if (departmentEmployees.length > 0 && (!assignedEmployeeId || !departmentEmployees.some(e => e.id === assignedEmployeeId))) {
+      setAssignedEmployeeId(departmentEmployees[0].id);
     }
-  }, [employees, assignedEmployeeId]);
+  }, [departmentEmployees, assignedEmployeeId]);
+
+  const canViewAllTasks = hasPermission('task', 'view_all');
 
   // Filters for displaying tasks
   const myTasks = useMemo(() => {
-    if (currentUserRole === 'manager') {
-      return tasks; // Managers see all tasks
+    if (canViewAllTasks) {
+      return tasks; // View all tasks if permission granted
     } else {
-      return tasks.filter(t => t.employeeId === currentEmployeeId); // Employees see only their own
+      return tasks.filter(t => t.employeeId === currentEmployeeId); // Assignee views own
     }
-  }, [tasks, currentUserRole, currentEmployeeId]);
+  }, [tasks, canViewAllTasks, currentEmployeeId]);
 
   const handleCreateTask = (e: React.FormEvent) => {
     e.preventDefault();
@@ -122,16 +141,16 @@ export default function TasksView() {
       <div>
         <h1 className="text-2xl font-display font-bold text-gray-900 tracking-tight">Task Assignments</h1>
         <p className="text-xs text-gray-500 mt-1">
-          {currentUserRole === 'manager' 
-            ? 'Assign deliverables to active team members, set deadlines, and track completion progress.' 
+          {canCreateTask 
+            ? 'Department Manager task assignment for active team members.' 
             : 'Track deliverables assigned to you and update active statuses.'}
         </p>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         
-        {/* 1. Left Form Column (Manager only) */}
-        {currentUserRole === 'manager' ? (
+        {/* 1. Left Form Column (Department Manager only) */}
+        {canCreateTask ? (
           <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-xs h-fit space-y-5">
             <div className="border-b border-gray-100 pb-3">
               <span className="text-[10px] font-bold text-indigo-600 uppercase font-mono tracking-wider flex items-center gap-1">
@@ -174,17 +193,21 @@ export default function TasksView() {
 
               {/* Assignee */}
               <div className="space-y-1.5">
-                <label className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider block">Assign to Employee</label>
+                <label className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider block">Assign to Department Employee</label>
                 <select
                   value={assignedEmployeeId}
                   onChange={(e) => setAssignedEmployeeId(e.target.value)}
                   className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs focus:outline-hidden focus:ring-1 focus:ring-indigo-500 cursor-pointer"
                 >
-                  {employees.map((emp) => (
-                    <option key={emp.id} value={emp.id}>
-                      {emp.name} ({emp.id})
-                    </option>
-                  ))}
+                  {departmentEmployees.length === 0 ? (
+                    <option value="">No employees in your department</option>
+                  ) : (
+                    departmentEmployees.map((emp) => (
+                      <option key={emp.id} value={emp.id}>
+                        {emp.name} ({emp.employeeId || emp.id} - {emp.departmentId.toUpperCase()})
+                      </option>
+                    ))
+                  )}
                 </select>
               </div>
 
@@ -310,8 +333,8 @@ export default function TasksView() {
                       );
                     })}
 
-                    {/* Delete action (manager only) */}
-                    {currentUserRole === 'manager' && (
+                    {/* Delete action (Department Manager only) */}
+                    {canCreateTask && (
                       <button
                         onClick={() => deleteTask(task.id)}
                         className="p-1 rounded-lg border border-transparent text-gray-300 hover:text-rose-500 hover:bg-rose-50 transition-colors cursor-pointer ml-1"
