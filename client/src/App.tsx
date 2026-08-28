@@ -75,15 +75,14 @@ function AppContent() {
 
       case "/tasks":
         return <TasksView />;
-        
         case "/messages":
   return <MessagesView />;
-  case "/calendar":
+
+case "/calendar":
   return <CalendarView />;
 
-        case "/reports":
+case "/reports":
   return <ReportsView />;
-
       // =========================
       // INVENTORY
       // =========================
