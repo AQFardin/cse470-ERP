@@ -20,6 +20,7 @@ enum SystemRole {
   PROJECT_MANAGER
   MANAGER
   HR
+  IT
   SALES
   SUPPORT
   EMPLOYEE

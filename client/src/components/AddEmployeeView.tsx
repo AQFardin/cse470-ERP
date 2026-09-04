@@ -7,7 +7,8 @@ interface AddEmployeeViewProps {
 }
 
 export default function AddEmployeeView({ onNavigate }: AddEmployeeViewProps) {
-  const { addEmployee, departments, currentUserRole } = useApp();
+  const { addEmployee, departments, hasPermission, employees } = useApp();
+  const canCreateEmployee = hasPermission('employee_records', 'create');
 
   // Form states
   const [firstName, setFirstName] = useState('');
@@ -22,6 +23,14 @@ export default function AddEmployeeView({ onNavigate }: AddEmployeeViewProps) {
   const [joiningDate, setJoiningDate] = useState(new Date().toISOString().split('T')[0]);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
+  // Check if selected department already has an active manager
+  const existingDeptManager = employees.find(
+    (e) =>
+      e.departmentId.toLowerCase() === departmentId.toLowerCase() &&
+      (e.systemRole === 'MANAGER' || e.role.toLowerCase().includes('manager')) &&
+      e.status !== 'inactive'
+  );
+
   const validate = () => {
     const nextErrors: Record<string, string> = {};
     if (!firstName.trim()) nextErrors.firstName = 'First name is required';
@@ -31,12 +40,17 @@ export default function AddEmployeeView({ onNavigate }: AddEmployeeViewProps) {
     if (!joiningDate) nextErrors.joiningDate = 'Joining date is required';
     if (salary <= 0) nextErrors.salary = 'Base annual salary must be positive';
 
+    // Enforce 1-manager-per-department rule
+    if (systemRole === 'MANAGER' && existingDeptManager) {
+      nextErrors.systemRole = `Department ${departmentId.toUpperCase()} already has an active Manager (${existingDeptManager.name}). Each department must have exactly one manager.`;
+    }
+
     setErrors(nextErrors);
     return Object.keys(nextErrors).length === 0;
   };
 
   const handleCreate = () => {
-    if (currentUserRole !== 'manager') return;
+    if (!canCreateEmployee) return;
     if (!validate()) return;
 
     addEmployee({
@@ -57,8 +71,8 @@ export default function AddEmployeeView({ onNavigate }: AddEmployeeViewProps) {
     onNavigate('/employees');
   };
 
-  // If user is an employee, block access to the form
-  if (currentUserRole !== 'manager') {
+  // If user is not HR / authorized, block access to the form
+  if (!canCreateEmployee) {
     return (
       <div className="p-8 text-center flex flex-col items-center justify-center min-h-full bg-gray-50/40">
         <div className="w-12 h-12 bg-amber-50 text-amber-500 rounded-full flex items-center justify-center mb-3">
@@ -66,7 +80,7 @@ export default function AddEmployeeView({ onNavigate }: AddEmployeeViewProps) {
         </div>
         <span className="text-sm font-bold text-gray-800">Access Restricted</span>
         <span className="text-xs text-gray-400 mt-1 max-w-sm">
-          Adding employee roster records is a Manager privilege. Please toggle View Mode to 'Manager' in the header toolbar.
+          Adding employee roster records is an <strong>HR privilege</strong>. Only Human Resources personnel can create employee profiles. Please switch to an HR user profile in the header.
         </span>
         <button 
           onClick={() => onNavigate('/employees')}
@@ -217,6 +231,11 @@ export default function AddEmployeeView({ onNavigate }: AddEmployeeViewProps) {
               <option value="SUPPORT">Support Agent</option>
               <option value="VENDOR">Vendor/Contractor</option>
             </select>
+            {errors.systemRole && (
+              <p className="text-rose-500 text-[10px] mt-1 flex items-center gap-1">
+                <ShieldAlert className="w-3 h-3 shrink-0" /> {errors.systemRole}
+              </p>
+            )}
           </div>
 
           {/* Department Selection */}

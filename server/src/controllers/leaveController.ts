@@ -13,40 +13,17 @@ const HR_ROUTED_LEAVE_TYPES: LeaveType[] = ['MATERNITY', 'UNPAID', 'EXTENDED', '
  * 2. Submitter's role → if Manager, find user with Admin role
  * 3. Otherwise → use reportingManagerId from employee record
  */
-async function determineApprover(employeeId: string, leaveType: LeaveType): Promise<string | null> {
-  // 1. HR-routed types → find an HR user's linked employee
-  if (HR_ROUTED_LEAVE_TYPES.includes(leaveType)) {
-    const hrUser = await prisma.user.findFirst({
-      where: { roles: { some: { role: 'HR' } }, isActive: true },
-      select: { employeeId: true },
-    });
-    return hrUser?.employeeId || null;
-  }
-
-  // 2. Check if the submitter is a Manager → route to Admin
-  const submitterUser = await prisma.user.findFirst({
-    where: { employeeId, isActive: true },
-    include: { roles: { select: { role: true } } },
+async function determineApprover(employeeId: string, _leaveType: LeaveType): Promise<string | null> {
+  // All employee leave requests go to HR for approval
+  const hrUser = await prisma.user.findFirst({
+    where: { roles: { some: { role: 'HR' } }, isActive: true },
+    select: { employeeId: true },
   });
-
-  if (submitterUser) {
-    const submitterRoles = submitterUser.roles.map((r) => r.role);
-    if (submitterRoles.includes('MANAGER') || submitterRoles.includes('ADMIN')) {
-      // Manager/Admin submits → route to Admin (find a different admin)
-      const adminUser = await prisma.user.findFirst({
-        where: {
-          roles: { some: { role: 'ADMIN' } },
-          isActive: true,
-          employeeId: { not: employeeId }, // not the same person
-        },
-        select: { employeeId: true },
-      });
-      // If no other admin, fall through to reporting manager
-      if (adminUser?.employeeId) return adminUser.employeeId;
-    }
+  if (hrUser?.employeeId) {
+    return hrUser.employeeId;
   }
 
-  // 3. Normal flow → reporting manager
+  // Fallback to reporting manager if no HR user found
   const employee = await prisma.employee.findUnique({
     where: { id: employeeId },
     select: { reportingManagerId: true },
@@ -269,22 +246,13 @@ export async function reviewLeaveRequest(req: Request, res: Response) {
     const isAdmin = userRoles.includes('ADMIN');
     const isHR = userRoles.includes('HR');
 
-    // HR can only approve HR-routed types
-    if (!isDesignatedApprover && !isAdmin) {
-      if (isHR && !HR_ROUTED_LEAVE_TYPES.includes(existing.type)) {
-        res.status(403).json({
-          success: false,
-          error: 'HR can only approve special leave types (maternity, unpaid, extended, legal)',
-        });
-        return;
-      }
-      if (!isHR) {
-        res.status(403).json({
-          success: false,
-          error: 'Only the designated approver can review this request',
-        });
-        return;
-      }
+    // Allow designated approver, Admin, or HR to review leave requests
+    if (!isDesignatedApprover && !isAdmin && !isHR) {
+      res.status(403).json({
+        success: false,
+        error: 'Only HR or the designated approver can review this leave request',
+      });
+      return;
     }
 
     const before = { ...existing };

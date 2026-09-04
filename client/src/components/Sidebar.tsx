@@ -43,8 +43,10 @@ interface SidebarProps {
 
 const ROLE_ICON_MAP: Record<string, React.ElementType> = {
   ADMIN: Crown,
+  PROJECT_MANAGER: FolderKanban,
   MANAGER: Shield,
   HR: HeartHandshake,
+  IT: LifeBuoy,
   SALES: ShoppingBag,
   SUPPORT: Headphones,
   EMPLOYEE: UserCheck,

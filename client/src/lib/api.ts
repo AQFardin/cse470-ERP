@@ -133,15 +133,22 @@ export function mapBackendLeaveRequest(be: any): LeaveRequest {
 /** Map a backend task assignment to UI Task type */
 export function mapBackendTask(be: any): Task {
   const assignee = be.assignedTo;
+  const assigner = be.assignedBy;
   return {
     id: be.id,
     title: be.title,
     description: be.description || '',
     employeeId: be.assignedToId,
     employeeName: assignee ? `${assignee.firstName} ${assignee.lastName}` : 'Unknown',
+    assignedById: be.assignedById || undefined,
+    assignedByName: assigner ? `${assigner.firstName} ${assigner.lastName}` : undefined,
     priority: mapPriority(be.priority),
     status: mapTaskStatus(be.status),
     deadline: formatDate(be.deadline),
+    projectId: be.projectId || undefined,
+    projectName: be.project?.name || undefined,
+    projectChunkId: be.projectChunkId || undefined,
+    projectChunkTitle: be.projectChunk?.title || undefined,
   };
 }
 
@@ -305,6 +312,8 @@ export async function createTaskAPI(data: {
   assignedById: string;
   priority: string;
   deadline: string;
+  projectId?: string;
+  projectChunkId?: string;
 }): Promise<Task> {
   const res = await fetchJSON('/tasks', {
     method: 'POST',

@@ -35,6 +35,25 @@ export async function createEmployee(req: Request, res: Response) {
     }
     const employeeId = `EMP${String(nextNum).padStart(3, '0')}`;
 
+    // Enforce 1-manager-per-department rule:
+    const isManagerRole = role === Role.MANAGER || systemRole === 'MANAGER';
+    if (isManagerRole) {
+      const existingManager = await prisma.employee.findFirst({
+        where: {
+          department: department as Department,
+          role: Role.MANAGER,
+          status: { not: 'INACTIVE' },
+        },
+      });
+      if (existingManager) {
+        res.status(400).json({
+          success: false,
+          error: `Department ${department} already has an active Manager (${existingManager.firstName} ${existingManager.lastName}, ${existingManager.employeeId}). Each department can only have one manager.`,
+        });
+        return;
+      }
+    }
+
     const employee = await prisma.employee.create({
       data: {
         employeeId,
@@ -224,12 +243,34 @@ export async function updateEmployee(req: Request, res: Response) {
       phoneNumber,
       department,
       position,
+      role,
       address,
       avatarUrl,
       reportingManagerId,
     } = req.body;
 
     const before = await prisma.employee.findUnique({ where: { id } });
+
+    // Enforce 1-manager-per-department rule on updates:
+    const targetDepartment = department || before?.department;
+    const targetRole = role || before?.role;
+    if (targetRole === Role.MANAGER) {
+      const existingManager = await prisma.employee.findFirst({
+        where: {
+          department: targetDepartment as Department,
+          role: Role.MANAGER,
+          status: { not: 'INACTIVE' },
+          id: { not: id },
+        },
+      });
+      if (existingManager) {
+        res.status(400).json({
+          success: false,
+          error: `Department ${targetDepartment} already has an active Manager (${existingManager.firstName} ${existingManager.lastName}). Each department can only have one manager.`,
+        });
+        return;
+      }
+    }
 
     const employee = await prisma.employee.update({
       where: { id },
@@ -240,6 +281,7 @@ export async function updateEmployee(req: Request, res: Response) {
         ...(phoneNumber !== undefined && { phoneNumber }),
         ...(department && { department: department as Department }),
         ...(position && { position }),
+        ...(role && { role: role as Role }),
         ...(address !== undefined && { address }),
         ...(avatarUrl !== undefined && { avatarUrl }),
         ...(reportingManagerId !== undefined && { reportingManagerId }),

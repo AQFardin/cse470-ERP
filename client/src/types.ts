@@ -50,9 +50,15 @@ export interface Task {
   description: string;
   employeeId: string;     // assignedToId from backend
   employeeName: string;   // Derived from assignedTo relation
+  assignedById?: string;  // Assigner ID
+  assignedByName?: string; // Derived from assignedBy relation
   priority: 'low' | 'medium' | 'high' | 'urgent';
   status: 'pending' | 'in-progress' | 'completed';
   deadline: string;
+  projectId?: string;
+  projectName?: string;
+  projectChunkId?: string;
+  projectChunkTitle?: string;
 }
 
 // ─── RBAC Types ─────────────────────────────────────────

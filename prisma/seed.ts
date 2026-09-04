@@ -1,6 +1,14 @@
 import { PrismaClient, Department, Role, EmployeeStatus, LeaveType, LeaveStatus, TaskPriority, TaskStatus, SystemRole, AuditAction, TicketCategory, TicketStatus, TicketPriority, ProjectStatus } from '../server/node_modules/.prisma/client';
+import path from 'path';
 
-const prisma = new PrismaClient();
+const dbPath = path.resolve(__dirname, 'dev.db').replace(/\\/g, '/');
+const prisma = new PrismaClient({
+  datasources: {
+    db: {
+      url: `file:${dbPath}`,
+    },
+  },
+});
 
 async function main() {
   console.log('🌱 Seeding database...');
@@ -267,7 +275,24 @@ async function main() {
     },
   });
 
-  console.log(`✅ Created 14 employees (6 Department Managers, 8 Team Members)`);
+  // IT Support Specialist employee
+  const empIT = await prisma.employee.create({
+    data: {
+      employeeId: 'EMP015',
+      firstName: 'Ian',
+      lastName: 'Tech',
+      email: 'ian.it@company.com',
+      phoneNumber: '+1-555-0115',
+      department: Department.OPERATIONS,
+      position: 'Senior IT Systems Engineer',
+      role: Role.EMPLOYEE,
+      hireDate: new Date('2023-05-10'),
+      status: EmployeeStatus.ACTIVE,
+      reportingManagerId: mgrOperations.id,
+    },
+  });
+
+  console.log(`✅ Created 15 employees (6 Department Managers, 9 Team Members)`);
 
   // ═══════════════════════════════════════════════════════
   // 3. CREATE USERS
@@ -316,8 +341,11 @@ async function main() {
   const userBob = await prisma.user.create({
     data: { email: 'bob.pm@company.com', name: 'Bob Projects', employeeId: empPM.id },
   });
+  const userIT = await prisma.user.create({
+    data: { email: 'ian.it@company.com', name: 'Ian Tech', employeeId: empIT.id },
+  });
 
-  console.log(`✅ Created 14 users`);
+  console.log(`✅ Created 15 users`);
 
   // ═══════════════════════════════════════════════════════
   // 4. ASSIGN USER ROLES
@@ -340,6 +368,7 @@ async function main() {
     // HR Manager
     { userId: userMarcusVance.id, role: SystemRole.EMPLOYEE },
     { userId: userMarcusVance.id, role: SystemRole.MANAGER },
+    { userId: userMarcusVance.id, role: SystemRole.HR },
 
     // Finance Manager
     { userId: userSarahJenkins.id, role: SystemRole.EMPLOYEE },
@@ -362,6 +391,8 @@ async function main() {
     { userId: userRobert.id, role: SystemRole.EMPLOYEE },
     { userId: userBob.id, role: SystemRole.EMPLOYEE },
     { userId: userBob.id, role: SystemRole.PROJECT_MANAGER },
+    { userId: userIT.id, role: SystemRole.EMPLOYEE },
+    { userId: userIT.id, role: SystemRole.IT },
   ];
 
   await prisma.userRole.createMany({ data: roleAssignments.map(ra => ({ userId: ra.userId, role: ra.role })) });
@@ -434,7 +465,7 @@ async function main() {
     ],
     PROJECT_MANAGER: [
       'employee_records.view_own', 'employee_records.view_all',
-      'project.view_all', 'project.chunk_create',
+      'project.create', 'project.view_all', 'project.edit', 'project.chunk_create',
       'task.view_all', 'task.view_own',
       'leave.request',
       'attendance.clock', 'attendance.view_own',
@@ -468,6 +499,14 @@ async function main() {
       'project.view_all',
     ],
     SUPPORT: [
+      'employee_records.view_own',
+      'leave.request',
+      'task.view_own',
+      'attendance.clock', 'attendance.view_own',
+      'ticket.raise', 'ticket.view_own', 'ticket.view_all', 'ticket.resolve',
+      'project.view_all',
+    ],
+    IT: [
       'employee_records.view_own',
       'leave.request',
       'task.view_own',
@@ -512,7 +551,7 @@ async function main() {
         endDate: new Date('2026-07-25'),
         reason: 'Family vacation — visiting parents in Mexico City',
         status: LeaveStatus.PENDING,
-        approverId: mgrEngineering.id,
+        approverId: mgrHR.id,
       },
     }),
     prisma.leaveRequest.create({
@@ -534,9 +573,9 @@ async function main() {
         endDate: new Date('2026-07-16'),
         reason: 'Moving to a new apartment',
         status: LeaveStatus.APPROVED,
-        reviewedById: mgrMarketing.id,
+        reviewedById: mgrHR.id,
         reviewedAt: new Date('2026-07-08'),
-        approverId: mgrMarketing.id,
+        approverId: mgrHR.id,
       },
     }),
     prisma.leaveRequest.create({
@@ -547,9 +586,9 @@ async function main() {
         endDate: new Date('2026-08-05'),
         reason: 'Summer break trip',
         status: LeaveStatus.DENIED,
-        reviewedById: mgrSales.id,
+        reviewedById: mgrHR.id,
         reviewedAt: new Date('2026-07-05'),
-        approverId: mgrSales.id,
+        approverId: mgrHR.id,
       },
     }),
   ]);
@@ -634,7 +673,7 @@ async function main() {
   // 8. SEED LEAVE BALANCES (2026)
   // ═══════════════════════════════════════════════════════
 
-  const allEmps = [mgrOperations, mgrMarketing, mgrEngineering, mgrHR, mgrFinance, mgrSales, empJames, empAisha, empMarcus, empEmily, empDavid, empOlivia, empRobert, empPM];
+  const allEmps = [mgrOperations, mgrMarketing, mgrEngineering, mgrHR, mgrFinance, mgrSales, empJames, empAisha, empMarcus, empEmily, empDavid, empOlivia, empRobert, empPM, empIT];
   const balanceDefaults: { type: LeaveType; balance: number }[] = [
     { type: LeaveType.VACATION, balance: 18 },
     { type: LeaveType.SICK, balance: 10 },
@@ -692,8 +731,8 @@ async function main() {
       department: Department.ENGINEERING,
       status: ProjectStatus.ACTIVE,
       startDate: new Date('2026-06-01'),
-      projectManagerId: mgrEngineering.id,
-      createdById: userSarah.id,
+      projectManagerId: empPM.id,
+      createdById: userBob.id,
     },
   });
 
@@ -704,12 +743,12 @@ async function main() {
       department: Department.MARKETING,
       status: ProjectStatus.PLANNING,
       startDate: new Date('2026-07-15'),
-      projectManagerId: mgrMarketing.id,
-      createdById: userSarah.id,
+      projectManagerId: empPM.id,
+      createdById: userBob.id,
     },
   });
 
-  await prisma.projectChunk.create({
+  const chunk1 = await prisma.projectChunk.create({
     data: {
       title: 'Backend API Microservices',
       description: 'Refactor monolithic backend into Node/Express services.',
@@ -720,7 +759,7 @@ async function main() {
     },
   });
 
-  await prisma.projectChunk.create({
+  const chunk2 = await prisma.projectChunk.create({
     data: {
       title: 'UI Design System & Component Library',
       description: 'Design and build shared component library for web apps.',
@@ -731,7 +770,36 @@ async function main() {
     },
   });
 
-  console.log('✅ Created 2 sample projects and 2 project chunks');
+  // Link tasks directly under project chunks!
+  await prisma.taskAssignment.create({
+    data: {
+      title: 'Implement Redis Cache Layer',
+      description: 'Integrate Redis caching for user sessions and frequent query optimization.',
+      assignedToId: empJames.id,
+      assignedById: mgrEngineering.id,
+      priority: TaskPriority.HIGH,
+      status: TaskStatus.IN_PROGRESS,
+      deadline: new Date('2026-07-25'),
+      projectId: proj1.id,
+      projectChunkId: chunk1.id,
+    },
+  });
+
+  await prisma.taskAssignment.create({
+    data: {
+      title: 'Design Dark Mode Color Tokens',
+      description: 'Define semantic color variables for dark mode and accessibility.',
+      assignedToId: empEmily.id,
+      assignedById: mgrMarketing.id,
+      priority: TaskPriority.MEDIUM,
+      status: TaskStatus.TODO,
+      deadline: new Date('2026-08-05'),
+      projectId: proj1.id,
+      projectChunkId: chunk2.id,
+    },
+  });
+
+  console.log('✅ Created 2 sample projects, 2 project chunks, and 2 chunk-linked tasks');
 
   await prisma.ticket.createMany({
     data: [
@@ -742,10 +810,20 @@ async function main() {
         priority: TicketPriority.HIGH,
         status: TicketStatus.OPEN,
         raisedById: userJames.id,
+        assignedToId: userIT.id,
+      },
+      {
+        title: 'Workstation Dual-Monitor & IAM Security Setup',
+        description: 'Need dual-monitor setup and AWS cloud IAM security credentials provisioned.',
+        category: TicketCategory.INTERNAL_IT,
+        priority: TicketPriority.MEDIUM,
+        status: TicketStatus.IN_PROGRESS,
+        raisedById: userElena.id,
+        assignedToId: userIT.id,
       },
       {
         title: 'Manager Approval for Equipment Request',
-        description: 'Need approval for dual-monitor setup requisition.',
+        description: 'Need approval for equipment requisition budget allocation.',
         category: TicketCategory.MANAGER_ASSIST,
         priority: TicketPriority.MEDIUM,
         status: TicketStatus.IN_PROGRESS,
@@ -764,7 +842,7 @@ async function main() {
     ],
   });
 
-  console.log('✅ Created 3 sample help desk tickets');
+  console.log('✅ Created 4 sample help desk tickets (including IT Support tickets assigned to Ian Tech)');
 
   console.log('\n🎉 Database seeded successfully!');
 }

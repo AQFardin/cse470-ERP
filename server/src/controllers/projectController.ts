@@ -13,6 +13,15 @@ export async function createProject(req: Request, res: Response) {
       return;
     }
 
+    const leadManagerId = projectManagerId || req.body.assignedManagerId;
+    const currentEmployeeId = req.currentUser!.employeeId;
+
+    // Prevent Project Managers from assigning projects to themselves
+    if (leadManagerId && currentEmployeeId && leadManagerId === currentEmployeeId) {
+      res.status(400).json({ success: false, error: 'Project Managers cannot assign project lead manager to themselves' });
+      return;
+    }
+
     const project = await prisma.project.create({
       data: {
         name,
@@ -21,7 +30,7 @@ export async function createProject(req: Request, res: Response) {
         startDate: new Date(startDate),
         endDate: endDate ? new Date(endDate) : null,
         status: (status as ProjectStatus) || ProjectStatus.ACTIVE,
-        projectManagerId: projectManagerId || null,
+        projectManagerId: leadManagerId || null,
         createdById: req.currentUser!.id,
       },
       include: {
@@ -135,8 +144,10 @@ export async function getAllProjects(req: Request, res: Response) {
             assignedManager: { select: { id: true, firstName: true, lastName: true, employeeId: true } },
             tasks: {
               include: {
-                assignedTo: { select: { id: true, firstName: true, lastName: true, employeeId: true } },
+                assignedTo: { select: { id: true, firstName: true, lastName: true, employeeId: true, department: true } },
+                assignedBy: { select: { id: true, firstName: true, lastName: true, employeeId: true } },
               },
+              orderBy: [{ priority: 'desc' }, { deadline: 'asc' }],
             },
           },
         },
@@ -170,8 +181,10 @@ export async function getProject(req: Request, res: Response) {
             assignedManager: { select: { id: true, firstName: true, lastName: true, employeeId: true } },
             tasks: {
               include: {
-                assignedTo: { select: { id: true, firstName: true, lastName: true, employeeId: true } },
+                assignedTo: { select: { id: true, firstName: true, lastName: true, employeeId: true, department: true } },
+                assignedBy: { select: { id: true, firstName: true, lastName: true, employeeId: true } },
               },
+              orderBy: [{ priority: 'desc' }, { deadline: 'asc' }],
             },
           },
         },

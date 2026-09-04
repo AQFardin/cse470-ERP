@@ -5,7 +5,7 @@ import type { Ticket } from '../types';
 import * as api from '../lib/api';
 
 export default function HelpDeskView() {
-  const { currentUser, hasPermission, showToast } = useApp();
+  const { currentUser, hasPermission, showToast, highestRole } = useApp();
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [loading, setLoading] = useState(true);
   const [filterCategory, setFilterCategory] = useState<string>('ALL');
@@ -19,7 +19,20 @@ export default function HelpDeskView() {
   const [priority, setPriority] = useState<'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT'>('MEDIUM');
   const [submitting, setSubmitting] = useState(false);
 
-  const canResolve = hasPermission('ticket', 'resolve');
+  // Supporting tickets with IT can ONLY be resolved by IT personnel (or Admin)
+  const canResolveTicket = (ticket: Ticket) => {
+    if (highestRole === 'ADMIN') return true;
+    if (ticket.category === 'INTERNAL_IT') {
+      return highestRole === 'IT' || currentUser?.roles.includes('IT');
+    }
+    if (ticket.category === 'CUSTOMER_SUPPORT') {
+      return highestRole === 'SUPPORT' || currentUser?.roles.includes('SUPPORT') || hasPermission('ticket', 'resolve');
+    }
+    if (ticket.category === 'MANAGER_ASSIST') {
+      return highestRole === 'MANAGER' || currentUser?.roles.includes('MANAGER') || hasPermission('ticket', 'resolve');
+    }
+    return hasPermission('ticket', 'resolve');
+  };
 
   const loadTickets = async () => {
     try {
@@ -198,32 +211,41 @@ export default function HelpDeskView() {
               </div>
 
               {/* Status Action Buttons */}
-              {canResolve && ticket.status !== 'CLOSED' && (
-                <div className="flex items-center gap-2 pt-2 border-t border-gray-100">
-                  {ticket.status === 'OPEN' && (
-                    <button
-                      onClick={() => handleUpdateStatus(ticket.id, 'IN_PROGRESS')}
-                      className="flex-1 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-semibold rounded-lg transition-colors cursor-pointer"
-                    >
-                      Start Progress
-                    </button>
-                  )}
-                  {ticket.status === 'IN_PROGRESS' && (
-                    <button
-                      onClick={() => handleUpdateStatus(ticket.id, 'RESOLVED')}
-                      className="flex-1 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold rounded-lg transition-colors cursor-pointer"
-                    >
-                      Mark Resolved
-                    </button>
-                  )}
-                  {ticket.status === 'RESOLVED' && (
-                    <button
-                      onClick={() => handleUpdateStatus(ticket.id, 'CLOSED')}
-                      className="flex-1 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-semibold rounded-lg transition-colors cursor-pointer"
-                    >
-                      Close Ticket
-                    </button>
-                  )}
+              {ticket.status !== 'CLOSED' && (
+                <div className="pt-2 border-t border-gray-100">
+                  {canResolveTicket(ticket) ? (
+                    <div className="flex items-center gap-2">
+                      {ticket.status === 'OPEN' && (
+                        <button
+                          onClick={() => handleUpdateStatus(ticket.id, 'IN_PROGRESS')}
+                          className="flex-1 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-semibold rounded-lg transition-colors cursor-pointer"
+                        >
+                          Start Progress
+                        </button>
+                      )}
+                      {ticket.status === 'IN_PROGRESS' && (
+                        <button
+                          onClick={() => handleUpdateStatus(ticket.id, 'RESOLVED')}
+                          className="flex-1 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold rounded-lg transition-colors cursor-pointer"
+                        >
+                          Mark Resolved
+                        </button>
+                      )}
+                      {ticket.status === 'RESOLVED' && (
+                        <button
+                          onClick={() => handleUpdateStatus(ticket.id, 'CLOSED')}
+                          className="flex-1 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-semibold rounded-lg transition-colors cursor-pointer"
+                        >
+                          Close Ticket
+                        </button>
+                      )}
+                    </div>
+                  ) : ticket.category === 'INTERNAL_IT' ? (
+                    <div className="flex items-center gap-1.5 text-[11px] font-medium text-amber-700 bg-amber-50 px-3 py-1.5 rounded-lg border border-amber-200/60">
+                      <AlertCircle className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                      <span>IT Support tickets can only be resolved by the IT Department.</span>
+                    </div>
+                  ) : null}
                 </div>
               )}
             </div>

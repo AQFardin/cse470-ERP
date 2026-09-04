@@ -21,10 +21,10 @@ const LEAVE_TYPES = [
   { value: 'VACATION', label: 'Vacation Leave' },
   { value: 'SICK', label: 'Sick Leave' },
   { value: 'PERSONAL', label: 'Personal Leave' },
-  { value: 'MATERNITY', label: 'Maternity Leave (Routes to HR)' },
-  { value: 'UNPAID', label: 'Unpaid Leave (Routes to HR)' },
-  { value: 'EXTENDED', label: 'Extended Leave (Routes to HR)' },
-  { value: 'LEGAL', label: 'Legal Leave (Routes to HR)' },
+  { value: 'MATERNITY', label: 'Maternity Leave' },
+  { value: 'UNPAID', label: 'Unpaid Leave' },
+  { value: 'EXTENDED', label: 'Extended Leave' },
+  { value: 'LEGAL', label: 'Legal Leave' },
   { value: 'OTHER', label: 'Other Leave' },
 ];
 
@@ -123,7 +123,7 @@ export default function LeaveRequestsView() {
         <div>
           <h1 className="text-2xl font-display font-bold text-gray-900 tracking-tight">Leave Requests</h1>
           <p className="text-xs text-gray-500 mt-1">
-            Dynamic approval routing engine: Employee → Manager → Admin (or HR for special leaves).
+            Employee leave requests are routed directly to HR for review and approval.
           </p>
         </div>
 

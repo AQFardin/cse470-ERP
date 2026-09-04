@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
   CheckSquare, 
   Plus, 
@@ -7,13 +7,16 @@ import {
   AlertCircle, 
   Sparkles, 
   User, 
-  HelpCircle,
-  Briefcase,
-  Lock,
-  ChevronDown
+  HelpCircle, 
+  Briefcase, 
+  Lock, 
+  ChevronDown,
+  Layers,
+  ShieldCheck
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
-import type { Task } from '../types';
+import type { Task, Project } from '../types';
+import * as api from '../lib/api';
 
 export default function TasksView() {
   const { 
@@ -23,7 +26,8 @@ export default function TasksView() {
     deleteTask, 
     employees, 
     currentEmployeeId,
-    hasPermission
+    hasPermission,
+    highestRole
   } = useApp();
   const canCreateTask = hasPermission('task', 'create');
 
@@ -34,11 +38,53 @@ export default function TasksView() {
   const [priority, setPriority] = useState<Task['priority']>('medium');
   const [deadline, setDeadline] = useState('');
   const [formError, setFormError] = useState('');
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [selectedChunkId, setSelectedChunkId] = useState('');
+
+  // Fetch projects to populate chunks
+  useEffect(() => {
+    (async () => {
+      try {
+        const data = await api.fetchProjects();
+        setProjects(data);
+      } catch (e) {
+        console.error('Failed to load projects for task assignment', e);
+      }
+    })();
+  }, []);
 
   // Find current manager's department
   const currentManagerEmp = useMemo(() => {
     return employees.find(e => e.id === currentEmployeeId);
   }, [employees, currentEmployeeId]);
+
+  // Available Project Chunks for the manager's department
+  const availableChunks = useMemo(() => {
+    const list = projects.flatMap((p) =>
+      (p.chunks || []).map((c) => ({
+        ...c,
+        projectName: p.name,
+      }))
+    );
+    if (highestRole === 'ADMIN' || highestRole === 'PROJECT_MANAGER') {
+      return list;
+    }
+    if (currentManagerEmp) {
+      return list.filter(
+        (c) =>
+          c.assignedDepartment.toLowerCase() === currentManagerEmp.departmentId.toLowerCase() ||
+          c.assignedManagerId === currentEmployeeId
+      );
+    }
+    return list;
+  }, [projects, highestRole, currentManagerEmp, currentEmployeeId]);
+
+  // Default chunk dropdown selection
+  useEffect(() => {
+    if (availableChunks.length > 0 && (!selectedChunkId || !availableChunks.some(c => c.id === selectedChunkId))) {
+      setSelectedChunkId(availableChunks[0].id);
+    }
+  }, [availableChunks, selectedChunkId]);
 
   // Eligible assignees: employees in manager's department (EXCLUDING managers)
   const departmentEmployees = useMemo(() => {
@@ -59,15 +105,23 @@ export default function TasksView() {
   }, [departmentEmployees, assignedEmployeeId]);
 
   const canViewAllTasks = hasPermission('task', 'view_all');
+  const canViewTeamTasks = hasPermission('task', 'view_team');
 
   // Filters for displaying tasks
   const myTasks = useMemo(() => {
     if (canViewAllTasks) {
       return tasks; // View all tasks if permission granted
+    } else if (canViewTeamTasks || canCreateTask) {
+      return tasks.filter(
+        (t) =>
+          t.assignedById === currentEmployeeId ||
+          t.employeeId === currentEmployeeId ||
+          departmentEmployees.some((e) => e.id === t.employeeId)
+      );
     } else {
-      return tasks.filter(t => t.employeeId === currentEmployeeId); // Assignee views own
+      return tasks.filter((t) => t.employeeId === currentEmployeeId); // Assignee views own
     }
-  }, [tasks, canViewAllTasks, currentEmployeeId]);
+  }, [tasks, canViewAllTasks, canViewTeamTasks, canCreateTask, currentEmployeeId, departmentEmployees]);
 
   const handleCreateTask = (e: React.FormEvent) => {
     e.preventDefault();
@@ -86,14 +140,20 @@ export default function TasksView() {
       return;
     }
 
-    const assignedEmp = employees.find(e => e.id === assignedEmployeeId);
+    const chunk = availableChunks.find((c) => c.id === selectedChunkId);
+    if (!chunk) {
+      setFormError('Please select a project chunk (tasks must be assigned under a chunk).');
+      return;
+    }
 
     addTask({
       title: title.trim(),
       description: description.trim(),
       employeeId: assignedEmployeeId,
       priority,
-      deadline
+      deadline,
+      projectId: chunk.projectId,
+      projectChunkId: chunk.id,
     });
 
     // Reset Form
@@ -189,6 +249,32 @@ export default function TasksView() {
                   rows={3}
                   className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs focus:outline-hidden focus:ring-1 focus:ring-indigo-500 resize-none"
                 />
+              </div>
+
+              {/* Project Chunk Selector */}
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider block">Project Chunk *</label>
+                <select
+                  value={selectedChunkId}
+                  onChange={(e) => setSelectedChunkId(e.target.value)}
+                  className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs focus:outline-hidden focus:ring-1 focus:ring-indigo-500 cursor-pointer"
+                  required
+                >
+                  {availableChunks.length === 0 ? (
+                    <option value="">No Project Chunks available for your department</option>
+                  ) : (
+                    availableChunks.map((chunk) => (
+                      <option key={chunk.id} value={chunk.id}>
+                        {chunk.projectName ? `${chunk.projectName} → ` : ''}{chunk.title} ({chunk.assignedDepartment.toUpperCase()})
+                      </option>
+                    ))
+                  )}
+                </select>
+                {availableChunks.length === 0 && (
+                  <p className="text-[10px] text-amber-600">
+                    Note: Chunks must first be delegated by the Project Manager in Projects.
+                  </p>
+                )}
               </div>
 
               {/* Assignee */}
@@ -294,6 +380,12 @@ export default function TasksView() {
                   <div className="space-y-1.5 flex-1 min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
                       <span className="font-mono text-[10px] text-gray-400 font-semibold">{task.id}</span>
+                      {task.projectChunkTitle && (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 text-[9px] font-bold text-purple-700 bg-purple-50 border border-purple-200 rounded-md">
+                          <Layers className="w-3 h-3 text-purple-600" />
+                          {task.projectName ? `${task.projectName} • ` : ''}{task.projectChunkTitle}
+                        </span>
+                      )}
                       {renderPriorityBadge(task.priority)}
                       <h3 className="text-sm font-bold text-gray-900 truncate">{task.title}</h3>
                     </div>
@@ -302,10 +394,16 @@ export default function TasksView() {
                     
                     <div className="flex flex-wrap items-center gap-x-4 gap-y-1 pt-1.5 text-[10px] text-gray-400 font-mono font-medium">
                       <span className="flex items-center gap-1">
-                        <User className="w-3.5 h-3.5 text-gray-300" /> Assigned to: <strong>{task.employeeName}</strong>
+                        <User className="w-3.5 h-3.5 text-gray-300" /> Assigned to: <strong className="text-gray-900">{task.employeeName}</strong>
                       </span>
                       <span className="flex items-center gap-1">
-                        <Clock className="w-3.5 h-3.5 text-gray-300" /> Due: <strong>{task.deadline}</strong>
+                        <ShieldCheck className="w-3.5 h-3.5 text-indigo-500" /> Assigned by: <strong className="text-gray-900">{task.assignedByName || 'Dept Manager'}</strong>
+                        {task.assignedById === currentEmployeeId && (
+                          <span className="px-1.5 py-0.2 bg-indigo-100 text-indigo-700 font-bold text-[8px] rounded">YOU</span>
+                        )}
+                      </span>
+                      <span className="flex items-center gap-1">
+                        <Clock className="w-3.5 h-3.5 text-gray-300" /> Due: <strong className="text-gray-900">{task.deadline}</strong>
                       </span>
                     </div>
                   </div>

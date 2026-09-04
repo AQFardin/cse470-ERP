@@ -1,11 +1,11 @@
-import React, { useState, useEffect } from 'react';
-import { FolderKanban, Plus, CheckCircle2, Clock, Calendar, Users, Building, Filter, ChevronDown, ChevronRight, CheckSquare, Layers, ShieldCheck, UserCheck, Edit } from 'lucide-react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { FolderKanban, Plus, CheckCircle2, Clock, Calendar, Users, Building, Filter, ChevronDown, ChevronRight, CheckSquare, Layers, ShieldCheck, UserCheck, Edit, User, X, AlertCircle } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import type { Project, ProjectChunk } from '../types';
 import * as api from '../lib/api';
 
 export default function ProjectView() {
-  const { employees, hasPermission, highestRole, showToast, currentEmployeeId } = useApp();
+  const { employees, hasPermission, highestRole, showToast, currentEmployeeId, refreshData } = useApp();
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
   const [expandedProjectId, setExpandedProjectId] = useState<string | null>(null);
@@ -39,9 +39,28 @@ export default function ProjectView() {
   const [editChunkManagerId, setEditChunkManagerId] = useState('');
   const [editChunkStatus, setEditChunkStatus] = useState('PLANNING');
 
+  // Create Task for Chunk Form (Department Manager)
+  const [chunkTaskModalOpen, setChunkTaskModalOpen] = useState(false);
+  const [selectedChunkForTask, setSelectedChunkForTask] = useState<ProjectChunk | null>(null);
+  const [taskTitle, setTaskTitle] = useState('');
+  const [taskDesc, setTaskDesc] = useState('');
+  const [taskAssigneeId, setTaskAssigneeId] = useState('');
+  const [taskPriority, setTaskPriority] = useState<'low' | 'medium' | 'high' | 'urgent'>('medium');
+  const [taskDeadline, setTaskDeadline] = useState('');
+
   const [submitting, setSubmitting] = useState(false);
 
-  const canCreateProject = hasPermission('project', 'create'); // Admin only
+  // Flatten all chunks across projects for chunk selection
+  const allChunks = useMemo(() => {
+    return projects.flatMap((p) =>
+      (p.chunks || []).map((c) => ({
+        ...c,
+        projectName: p.name,
+      }))
+    );
+  }, [projects]);
+
+  const canCreateProject = hasPermission('project', 'create'); // Project Manager / Admin
   const canCreateChunk = hasPermission('project', 'chunk_create'); // Project Manager / Admin
 
   const loadProjects = async () => {
@@ -142,6 +161,55 @@ export default function ProjectView() {
     }
   };
 
+  const openTaskModalForChunk = (chunk: ProjectChunk) => {
+    setSelectedChunkForTask(chunk);
+    setTaskTitle('');
+    setTaskDesc('');
+    setTaskPriority('medium');
+    const nextWeek = new Date();
+    nextWeek.setDate(nextWeek.getDate() + 7);
+    setTaskDeadline(nextWeek.toISOString().split('T')[0]);
+
+    // Find first regular employee in chunk's department
+    const eligible = employees.filter((emp) => {
+      const isManager = emp.systemRole === 'MANAGER' || emp.role.toLowerCase().includes('manager');
+      const inDept = emp.departmentId.toLowerCase() === chunk.assignedDepartment.toLowerCase();
+      return inDept && !isManager && emp.status !== 'inactive';
+    });
+    setTaskAssigneeId(eligible[0]?.id || '');
+    setChunkTaskModalOpen(true);
+  };
+
+  const handleCreateChunkTask = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedChunkForTask || !taskTitle.trim() || !taskAssigneeId || !taskDeadline) {
+      showToast('Please fill in all required task fields', 'warning');
+      return;
+    }
+
+    try {
+      setSubmitting(true);
+      await api.createTaskAPI({
+        title: taskTitle.trim(),
+        description: taskDesc.trim(),
+        assignedToId: taskAssigneeId,
+        assignedById: currentEmployeeId,
+        priority: taskPriority,
+        deadline: taskDeadline,
+        projectId: selectedChunkForTask.projectId,
+        projectChunkId: selectedChunkForTask.id,
+      });
+      showToast(`Task assigned under chunk "${selectedChunkForTask.title}"`, 'success');
+      setChunkTaskModalOpen(false);
+      loadProjects();
+      refreshData();
+    } catch (err: any) {
+      showToast(err.message || 'Failed to create task', 'error');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   const getStatusBadge = (status: string) => {
     switch (status) {
       case 'ACTIVE':
@@ -168,7 +236,7 @@ export default function ProjectView() {
           <div>
             <h1 className="text-xl font-bold font-display tracking-tight text-white">Project Hierarchy & Delegation</h1>
             <p className="text-xs text-purple-200/80 mt-0.5">
-              Admin creates Projects & assigns PM → PM delegates Project Chunks to Dept Managers → Dept Managers assign Tasks to Employees.
+              Project Manager creates Projects & Chunks → Assigns Department Managers (not themselves) → Managers assign Tasks to Employees.
             </p>
           </div>
         </div>
@@ -179,7 +247,7 @@ export default function ProjectView() {
             className="flex items-center gap-2 px-4 py-2.5 bg-purple-600 hover:bg-purple-500 text-white rounded-xl text-xs font-semibold shadow-lg shadow-purple-600/30 transition-all cursor-pointer shrink-0 self-start md:self-auto"
           >
             <Plus className="w-4 h-4" />
-            Create Project (Admin)
+            Create Project
           </button>
         )}
       </div>
@@ -265,68 +333,131 @@ export default function ProjectView() {
                       </p>
                     ) : (
                       <div className="space-y-3">
-                        {chunks.map((chunk) => (
-                          <div key={chunk.id} className="p-4 bg-white rounded-xl border border-gray-200 space-y-2">
-                            <div className="flex items-center justify-between">
-                              <div className="flex items-center gap-2">
-                                <span className="px-2 py-0.5 rounded-md text-[10px] font-bold uppercase bg-blue-50 text-blue-700 border border-blue-200 font-mono">
-                                  {chunk.assignedDepartment}
-                                </span>
-                                <h5 className="text-xs font-bold text-gray-900">{chunk.title}</h5>
+                        {chunks.map((chunk) => {
+                          const isChunkManager = chunk.assignedManagerId === currentEmployeeId;
+                          const canAssignTasks = isChunkManager || hasPermission('task', 'create') || highestRole === 'ADMIN' || highestRole === 'PROJECT_MANAGER';
+
+                          return (
+                            <div key={chunk.id} className="p-4 bg-white rounded-xl border border-gray-200 space-y-3">
+                              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <span className="px-2 py-0.5 rounded-md text-[10px] font-bold uppercase bg-blue-50 text-blue-700 border border-blue-200 font-mono">
+                                    {chunk.assignedDepartment}
+                                  </span>
+                                  <h5 className="text-xs font-bold text-gray-900">{chunk.title}</h5>
+                                  {isChunkManager && (
+                                    <span className="px-2 py-0.5 rounded-full text-[9px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200">
+                                      Your Assigned Chunk
+                                    </span>
+                                  )}
+                                </div>
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <span className="text-[10px] text-indigo-600 font-semibold flex items-center gap-1">
+                                    <UserCheck className="w-3 h-3" /> Dept Manager: {chunk.assignedManagerName || 'Unassigned'}
+                                  </span>
+                                  {canAssignTasks && (
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        openTaskModalForChunk(chunk);
+                                      }}
+                                      className="flex items-center gap-1 px-2.5 py-1 bg-indigo-600 hover:bg-indigo-500 text-white text-[11px] font-semibold rounded-lg shadow-xs transition-colors cursor-pointer"
+                                      title="Add Task under this chunk"
+                                    >
+                                      <Plus className="w-3 h-3" /> Add Task
+                                    </button>
+                                  )}
+                                  {canCreateChunk && (
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setEditingChunkId(chunk.id);
+                                        setEditChunkTitle(chunk.title);
+                                        setEditChunkDesc(chunk.description || '');
+                                        setEditChunkDept(chunk.assignedDepartment);
+                                        setEditChunkManagerId(chunk.assignedManagerId || '');
+                                        setEditChunkStatus(chunk.status || 'PLANNING');
+                                        setEditChunkModalOpen(true);
+                                      }}
+                                      className="p-1 rounded-lg border border-gray-200 hover:border-purple-300 bg-white hover:bg-purple-50 text-gray-500 hover:text-purple-600 transition-all cursor-pointer"
+                                      title="Edit Chunk"
+                                    >
+                                      <Edit className="w-3.5 h-3.5" />
+                                    </button>
+                                  )}
+                                </div>
                               </div>
-                              <div className="flex items-center gap-2">
-                                <span className="text-[10px] text-indigo-600 font-semibold flex items-center gap-1">
-                                  <UserCheck className="w-3 h-3" /> Dept Manager: {chunk.assignedManagerName || 'Unassigned'}
-                                </span>
-                                {canCreateChunk && (
-                                  <button
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      setEditingChunkId(chunk.id);
-                                      setEditChunkTitle(chunk.title);
-                                      setEditChunkDesc(chunk.description || '');
-                                      setEditChunkDept(chunk.assignedDepartment);
-                                      setEditChunkManagerId(chunk.assignedManagerId || '');
-                                      setEditChunkStatus(chunk.status || 'PLANNING');
-                                      setEditChunkModalOpen(true);
-                                    }}
-                                    className="p-1 rounded-lg border border-gray-200 hover:border-purple-300 bg-white hover:bg-purple-50 text-gray-500 hover:text-purple-600 transition-all cursor-pointer"
-                                    title="Edit Chunk"
-                                  >
-                                    <Edit className="w-3.5 h-3.5" />
-                                  </button>
+                              {chunk.description && (
+                                <p className="text-[11px] text-gray-500">{chunk.description}</p>
+                              )}
+
+                              {/* Sub-Tasks assigned under this chunk */}
+                              <div className="pt-2 border-t border-gray-100">
+                                <div className="flex items-center justify-between mb-2">
+                                  <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider flex items-center gap-1">
+                                    <CheckSquare className="w-3 h-3 text-indigo-500" />
+                                    Tasks Under this Chunk ({chunk.tasks?.length || 0})
+                                  </span>
+                                </div>
+
+                                {(!chunk.tasks || chunk.tasks.length === 0) ? (
+                                  <p className="text-[11px] text-gray-400 italic bg-gray-50/60 p-2.5 rounded-lg border border-dashed border-gray-200">
+                                    No tasks assigned to employees under this chunk yet. Click "+ Add Task" to assign one.
+                                  </p>
+                                ) : (
+                                  <div className="space-y-1.5">
+                                    {chunk.tasks.map((t) => (
+                                      <div key={t.id} className="p-2.5 bg-gray-50/80 hover:bg-gray-100/60 rounded-xl border border-gray-200/80 space-y-1.5 transition-colors">
+                                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5">
+                                          <div className="space-y-0.5">
+                                            <span className="font-bold text-xs text-gray-900">{t.title}</span>
+                                            {t.description && (
+                                              <p className="text-[11px] text-gray-500 line-clamp-1">{t.description}</p>
+                                            )}
+                                          </div>
+                                          <div className="flex items-center gap-2 shrink-0">
+                                            <span className={`px-2 py-0.5 rounded-md text-[9px] font-bold uppercase font-mono ${
+                                              t.priority === 'urgent' ? 'bg-rose-50 text-rose-600 border border-rose-200' :
+                                              t.priority === 'high' ? 'bg-amber-50 text-amber-600 border border-amber-200' :
+                                              'bg-blue-50 text-blue-600 border border-blue-200'
+                                            }`}>
+                                              {t.priority}
+                                            </span>
+                                            <span className={`px-2 py-0.5 rounded-md text-[9px] font-bold uppercase ${
+                                              t.status === 'completed' ? 'bg-emerald-50 text-emerald-600 border border-emerald-200' :
+                                              t.status === 'in-progress' ? 'bg-indigo-50 text-indigo-600 border border-indigo-200' :
+                                              'bg-amber-50 text-amber-600 border border-amber-200'
+                                            }`}>
+                                              {t.status.replace('-', ' ')}
+                                            </span>
+                                          </div>
+                                        </div>
+                                        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[10px] text-gray-500 font-mono pt-1 border-t border-gray-200/50">
+                                          <span className="flex items-center gap-1">
+                                            <User className="w-3 h-3 text-gray-400" />
+                                            Assigned to: <strong className="text-gray-900">{t.employeeName}</strong>
+                                          </span>
+                                          <span className="flex items-center gap-1">
+                                            <ShieldCheck className="w-3 h-3 text-indigo-500" />
+                                            Assigned by: <strong className="text-gray-900">{t.assignedByName || 'Dept Manager'}</strong>
+                                            {t.assignedById === currentEmployeeId && (
+                                              <span className="px-1.5 py-0.2 bg-indigo-100 text-indigo-700 font-bold text-[8px] rounded">YOU</span>
+                                            )}
+                                          </span>
+                                          {t.deadline && (
+                                            <span className="flex items-center gap-1 text-gray-400">
+                                              <Clock className="w-3 h-3" /> Due: <strong className="text-gray-700">{t.deadline}</strong>
+                                            </span>
+                                          )}
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
                                 )}
                               </div>
                             </div>
-                            {chunk.description && (
-                              <p className="text-[11px] text-gray-500">{chunk.description}</p>
-                            )}
-
-                            {/* Sub-Tasks assigned by Department Manager */}
-                            <div className="pt-2 border-t border-gray-100">
-                              <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-1">
-                                Department Tasks ({chunk.tasks?.length || 0})
-                              </span>
-                              {(!chunk.tasks || chunk.tasks.length === 0) ? (
-                                <p className="text-[11px] text-gray-400 italic">No tasks created by Dept Manager for employees yet.</p>
-                              ) : (
-                                <div className="space-y-1">
-                                  {chunk.tasks.map((t) => (
-                                    <div key={t.id} className="flex items-center justify-between text-[11px] p-2 bg-gray-50 rounded-lg">
-                                      <span className="font-semibold text-gray-800">{t.title}</span>
-                                      <div className="flex items-center gap-2">
-                                        <span className="text-gray-500">Assignee: <strong>{t.employeeName}</strong></span>
-                                        <span className="px-2 py-0.5 rounded-md text-[9px] font-bold bg-emerald-50 text-emerald-600 border border-emerald-100">
-                                          {t.status.toUpperCase()}
-                                        </span>
-                                      </div>
-                                    </div>
-                                  ))}
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                        ))}
+                          );
+                        })}
                       </div>
                     )}
                   </div>
@@ -359,19 +490,28 @@ export default function ProjectView() {
               </div>
 
               <div>
-                <label className="block font-semibold text-gray-700 mb-1">Assign Project Manager (PM) *</label>
+                <label className="block font-semibold text-gray-700 mb-1">Assign Department Manager (Lead) *</label>
                 <select
                   value={projectManagerId}
                   onChange={(e) => setProjectManagerId(e.target.value)}
                   className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs focus:ring-1 focus:ring-purple-500 cursor-pointer"
                   required
                 >
-                  <option value="">Select Project Manager...</option>
-                  {employees.map((emp) => (
-                    <option key={emp.id} value={emp.id}>
-                      {emp.name} ({emp.employeeId} - {emp.role})
-                    </option>
-                  ))}
+                  <option value="">Select Department Manager...</option>
+                  {employees
+                    .filter((emp) => {
+                      const isDeptManager =
+                        emp.systemRole === 'MANAGER' ||
+                        emp.role.toLowerCase().includes('manager');
+                      const isSelf = emp.id === currentEmployeeId;
+                      // Cannot assign oneself, must be a department manager
+                      return isDeptManager && !isSelf;
+                    })
+                    .map((emp) => (
+                      <option key={emp.id} value={emp.id}>
+                        {emp.name} ({emp.departmentId.toUpperCase()} - {emp.role})
+                      </option>
+                    ))}
                 </select>
               </div>
 
@@ -644,6 +784,172 @@ export default function ProjectView() {
                   className="flex-1 py-2.5 bg-purple-600 hover:bg-purple-500 text-white font-semibold rounded-xl transition-colors cursor-pointer disabled:opacity-50"
                 >
                   {submitting ? 'Saving...' : 'Save Changes'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Department Manager / PM Modal: Create Task for Project Chunk */}
+      {chunkTaskModalOpen && selectedChunkForTask && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-2xl p-6 w-full max-w-md space-y-4 shadow-2xl border border-gray-100">
+            <div className="flex items-center justify-between pb-2 border-b border-gray-100">
+              <h2 className="text-base font-bold text-gray-900 flex items-center gap-2">
+                <CheckSquare className="w-5 h-5 text-indigo-600" />
+                Assign Task Under Project Chunk
+              </h2>
+              <button
+                onClick={() => setChunkTaskModalOpen(false)}
+                className="text-gray-400 hover:text-gray-600 cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleCreateChunkTask} className="space-y-4 text-xs">
+              {/* Option to select which chunk to add to */}
+              <div>
+                <label className="block font-semibold text-gray-700 mb-1">Target Project Chunk *</label>
+                <select
+                  value={selectedChunkForTask.id}
+                  onChange={(e) => {
+                    const target = allChunks.find((c) => c.id === e.target.value);
+                    if (target) {
+                      setSelectedChunkForTask(target);
+                      const eligible = employees.filter((emp) => {
+                        const isManager = emp.systemRole === 'MANAGER' || emp.role.toLowerCase().includes('manager');
+                        const inDept = emp.departmentId.toLowerCase() === target.assignedDepartment.toLowerCase();
+                        return inDept && !isManager && emp.status !== 'inactive';
+                      });
+                      setTaskAssigneeId(eligible[0]?.id || '');
+                    }
+                  }}
+                  className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs focus:ring-1 focus:ring-indigo-500 cursor-pointer"
+                  required
+                >
+                  {allChunks
+                    .filter((c) => {
+                      if (highestRole === 'ADMIN' || highestRole === 'PROJECT_MANAGER') return true;
+                      const myEmp = employees.find((e) => e.id === currentEmployeeId);
+                      return (
+                        c.assignedManagerId === currentEmployeeId ||
+                        (myEmp && c.assignedDepartment.toLowerCase() === myEmp.departmentId.toLowerCase())
+                      );
+                    })
+                    .map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.projectName ? `${c.projectName} → ` : ''}{c.title} ({c.assignedDepartment.toUpperCase()})
+                      </option>
+                    ))}
+                </select>
+              </div>
+
+              {/* Task Title */}
+              <div>
+                <label className="block font-semibold text-gray-700 mb-1">Task Title *</label>
+                <input
+                  type="text"
+                  placeholder="e.g. Implement JWT authentication middleware..."
+                  value={taskTitle}
+                  onChange={(e) => setTaskTitle(e.target.value)}
+                  className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs focus:ring-1 focus:ring-indigo-500"
+                  required
+                />
+              </div>
+
+              {/* Task Description */}
+              <div>
+                <label className="block font-semibold text-gray-700 mb-1">Task Scope & Description</label>
+                <textarea
+                  placeholder="Detailed instructions for the assigned team member..."
+                  value={taskDesc}
+                  onChange={(e) => setTaskDesc(e.target.value)}
+                  rows={3}
+                  className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs focus:ring-1 focus:ring-indigo-500"
+                />
+              </div>
+
+              {/* Assignee - filtered to eligible employees in chunk's department */}
+              <div>
+                <label className="block font-semibold text-gray-700 mb-1">
+                  Assign to Employee ({selectedChunkForTask.assignedDepartment.toUpperCase()}) *
+                </label>
+                <select
+                  value={taskAssigneeId}
+                  onChange={(e) => setTaskAssigneeId(e.target.value)}
+                  className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs focus:ring-1 focus:ring-indigo-500 cursor-pointer"
+                  required
+                >
+                  <option value="">Select Department Team Member...</option>
+                  {employees
+                    .filter((emp) => {
+                      const isManager = emp.systemRole === 'MANAGER' || emp.role.toLowerCase().includes('manager');
+                      const inDept = emp.departmentId.toLowerCase() === selectedChunkForTask.assignedDepartment.toLowerCase();
+                      return inDept && !isManager && emp.status !== 'inactive';
+                    })
+                    .map((emp) => (
+                      <option key={emp.id} value={emp.id}>
+                        {emp.name} ({emp.employeeId || emp.id} - {emp.role})
+                      </option>
+                    ))}
+                </select>
+                {employees.filter((emp) => {
+                  const isManager = emp.systemRole === 'MANAGER' || emp.role.toLowerCase().includes('manager');
+                  const inDept = emp.departmentId.toLowerCase() === selectedChunkForTask.assignedDepartment.toLowerCase();
+                  return inDept && !isManager && emp.status !== 'inactive';
+                }).length === 0 && (
+                  <p className="text-[11px] text-amber-600 mt-1 flex items-center gap-1">
+                    <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                    No regular employees found in {selectedChunkForTask.assignedDepartment.toUpperCase()} department to assign tasks to.
+                  </p>
+                )}
+              </div>
+
+              {/* Priority & Deadline */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-semibold text-gray-700 mb-1">Priority</label>
+                  <select
+                    value={taskPriority}
+                    onChange={(e) => setTaskPriority(e.target.value as any)}
+                    className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs focus:ring-1 focus:ring-indigo-500 cursor-pointer"
+                  >
+                    <option value="low">Low</option>
+                    <option value="medium">Medium</option>
+                    <option value="high">High</option>
+                    <option value="urgent">Urgent</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block font-semibold text-gray-700 mb-1">Deadline *</label>
+                  <input
+                    type="date"
+                    value={taskDeadline}
+                    onChange={(e) => setTaskDeadline(e.target.value)}
+                    className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs focus:ring-1 focus:ring-indigo-500"
+                    required
+                  />
+                </div>
+              </div>
+
+              {/* Submit Buttons */}
+              <div className="flex items-center gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setChunkTaskModalOpen(false)}
+                  className="flex-1 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold rounded-xl transition-colors cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={submitting || !taskAssigneeId}
+                  className="flex-1 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white font-semibold rounded-xl transition-colors cursor-pointer disabled:opacity-50"
+                >
+                  {submitting ? 'Assigning...' : 'Assign Task to Chunk'}
                 </button>
               </div>
             </form>

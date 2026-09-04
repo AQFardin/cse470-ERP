@@ -24,7 +24,12 @@ export async function createTicket(req: Request, res: Response) {
           where: { roles: { some: { role: 'SUPPORT' } }, isActive: true },
         });
         targetAssigneeId = supportUser?.id || null;
-      } else if (category === 'INTERNAL_IT' || category === 'MANAGER_ASSIST') {
+      } else if (category === 'INTERNAL_IT') {
+        const itUser = await prisma.user.findFirst({
+          where: { roles: { some: { role: 'IT' } }, isActive: true },
+        });
+        targetAssigneeId = itUser?.id || null;
+      } else if (category === 'MANAGER_ASSIST') {
         const adminUser = await prisma.user.findFirst({
           where: { roles: { some: { role: 'ADMIN' } }, isActive: true },
         });
@@ -83,10 +88,13 @@ export async function getAllTickets(req: Request, res: Response) {
         { assignedToId: currentUserId },
       ];
     } else {
-      // Support role views Customer Support lane; Admin/Manager views IT/Internal lane
-      const isSupportOnly = userRoles.includes('SUPPORT') && !userRoles.includes('ADMIN') && !userRoles.includes('MANAGER');
+      // Support role views Customer Support lane; IT role views Internal IT lane
+      const isSupportOnly = userRoles.includes('SUPPORT') && !userRoles.includes('ADMIN') && !userRoles.includes('IT');
+      const isITOnly = userRoles.includes('IT') && !userRoles.includes('ADMIN');
       if (isSupportOnly && !category) {
         where.category = TicketCategory.CUSTOMER_SUPPORT;
+      } else if (isITOnly && !category) {
+        where.category = TicketCategory.INTERNAL_IT;
       }
     }
 
@@ -139,6 +147,19 @@ export async function updateTicket(req: Request, res: Response) {
     const before = await prisma.ticket.findUnique({ where: { id } });
     if (!before) {
       res.status(404).json({ success: false, error: 'Ticket not found' });
+      return;
+    }
+
+    // Enforce that INTERNAL_IT tickets can ONLY be solved or updated by IT role (or ADMIN)
+    const userRoles = req.currentUser!.roles;
+    const isIT = userRoles.includes('IT');
+    const isAdmin = userRoles.includes('ADMIN');
+
+    if (before.category === TicketCategory.INTERNAL_IT && !isIT && !isAdmin) {
+      res.status(403).json({
+        success: false,
+        error: 'Forbidden: IT support tickets can only be resolved by the IT department',
+      });
       return;
     }
 

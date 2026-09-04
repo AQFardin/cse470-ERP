@@ -52,6 +52,16 @@ export async function createTask(req: Request, res: Response) {
       return;
     }
 
+    let finalProjectId = projectId || null;
+    if (projectChunkId) {
+      const chunk = await prisma.projectChunk.findUnique({
+        where: { id: projectChunkId },
+      });
+      if (chunk) {
+        finalProjectId = chunk.projectId;
+      }
+    }
+
     const task = await prisma.taskAssignment.create({
       data: {
         title,
@@ -60,7 +70,7 @@ export async function createTask(req: Request, res: Response) {
         assignedById: assignedById || req.currentUser!.employeeId!,
         priority: (priority as TaskPriority) || TaskPriority.MEDIUM,
         deadline: new Date(deadline),
-        projectId: projectId || null,
+        projectId: finalProjectId,
         projectChunkId: projectChunkId || null,
         milestone: milestone || null,
       },
@@ -77,8 +87,23 @@ export async function createTask(req: Request, res: Response) {
         },
         assignedBy: {
           select: {
+            id: true,
             firstName: true,
             lastName: true,
+            employeeId: true,
+          },
+        },
+        projectChunk: {
+          select: {
+            id: true,
+            title: true,
+            projectId: true,
+          },
+        },
+        project: {
+          select: {
+            id: true,
+            name: true,
           },
         },
       },
@@ -119,10 +144,24 @@ export async function getAllTasks(req: Request, res: Response) {
 
     // Role-based scoping
     const canViewAll = await userHasPermission(userRoles, 'task', 'view_all');
+    const canViewTeam = await userHasPermission(userRoles, 'task', 'view_team');
 
     if (!canViewAll && currentEmployeeId) {
-      // Employee: only own tasks
-      where.assignedToId = currentEmployeeId;
+      if (canViewTeam) {
+        const emp = await prisma.employee.findUnique({ where: { id: currentEmployeeId } });
+        if (emp) {
+          where.OR = [
+            { assignedToId: currentEmployeeId },
+            { assignedById: currentEmployeeId },
+            { assignedTo: { department: emp.department } },
+          ];
+        } else {
+          where.assignedToId = currentEmployeeId;
+        }
+      } else {
+        // Regular employee: only own tasks
+        where.assignedToId = currentEmployeeId;
+      }
     }
 
     const tasks = await prisma.taskAssignment.findMany({
@@ -141,8 +180,23 @@ export async function getAllTasks(req: Request, res: Response) {
         },
         assignedBy: {
           select: {
+            id: true,
             firstName: true,
             lastName: true,
+            employeeId: true,
+          },
+        },
+        projectChunk: {
+          select: {
+            id: true,
+            title: true,
+            projectId: true,
+          },
+        },
+        project: {
+          select: {
+            id: true,
+            name: true,
           },
         },
       },
@@ -185,18 +239,40 @@ export async function updateTask(req: Request, res: Response) {
   try {
     const id = req.params.id as string;
     const { title, description, priority, status, deadline, assignedToId } = req.body;
+    const userRoles = req.currentUser!.roles;
+    const currentEmployeeId = req.currentUser!.employeeId;
 
     const before = await prisma.taskAssignment.findUnique({ where: { id } });
+    if (!before) {
+      res.status(404).json({ success: false, error: 'Task not found' });
+      return;
+    }
+
+    const canEdit = await userHasPermission(userRoles, 'task', 'edit');
+    const isAssignee = currentEmployeeId && before.assignedToId === currentEmployeeId;
+
+    // Check if updating only status
+    const isStatusOnly = status && !title && !description && !priority && !deadline && !assignedToId;
+
+    if (!canEdit) {
+      if (!isAssignee || !isStatusOnly) {
+        res.status(403).json({
+          success: false,
+          error: 'Employees can only update the status of their own assigned tasks',
+        });
+        return;
+      }
+    }
 
     const task = await prisma.taskAssignment.update({
       where: { id },
       data: {
-        ...(title && { title }),
-        ...(description !== undefined && { description }),
-        ...(priority && { priority: priority as TaskPriority }),
+        ...(canEdit && title && { title }),
+        ...(canEdit && description !== undefined && { description }),
+        ...(canEdit && priority && { priority: priority as TaskPriority }),
         ...(status && { status: status as TaskStatus }),
-        ...(deadline && { deadline: new Date(deadline) }),
-        ...(assignedToId && { assignedToId }),
+        ...(canEdit && deadline && { deadline: new Date(deadline) }),
+        ...(canEdit && assignedToId && { assignedToId }),
       },
       include: {
         assignedTo: {

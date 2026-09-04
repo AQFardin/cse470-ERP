@@ -62,7 +62,7 @@ const INITIAL_DEPARTMENTS: Department[] = [
 
 // Role priority for display
 const ROLE_PRIORITY: Record<string, number> = {
-  ADMIN: 7, MANAGER: 6, HR: 5, SALES: 4, SUPPORT: 3, EMPLOYEE: 2, VENDOR: 1,
+  ADMIN: 10, PROJECT_MANAGER: 9, MANAGER: 8, HR: 7, IT: 6, SALES: 5, SUPPORT: 4, EMPLOYEE: 2, VENDOR: 1,
 };
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -264,7 +264,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         assignedToId: taskData.employeeId,
         assignedById: currentEmployeeId,
         priority: taskData.priority,
-        deadline: taskData.deadline
+        deadline: taskData.deadline,
+        projectId: taskData.projectId,
+        projectChunkId: taskData.projectChunkId,
       });
       await refreshData();
       showToast(`Task "${taskData.title}" assigned successfully`, 'success');

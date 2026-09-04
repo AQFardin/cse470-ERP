@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Search, Bell, ChevronDown, Menu, Shield, UserCheck, Crown, HeartHandshake, Headphones, ShoppingBag, Users as UsersIcon } from 'lucide-react';
+import { Search, Bell, ChevronDown, Menu, Shield, UserCheck, Crown, HeartHandshake, Headphones, ShoppingBag, Users as UsersIcon, FolderKanban, LifeBuoy } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -12,8 +12,10 @@ interface HeaderProps {
 
 const ROLE_CONFIG: Record<string, { icon: React.ElementType; color: string; bgColor: string }> = {
   ADMIN: { icon: Crown, color: 'text-amber-500', bgColor: 'bg-amber-500/10' },
+  PROJECT_MANAGER: { icon: FolderKanban, color: 'text-purple-500', bgColor: 'bg-purple-500/10' },
   MANAGER: { icon: Shield, color: 'text-indigo-500', bgColor: 'bg-indigo-500/10' },
   HR: { icon: HeartHandshake, color: 'text-rose-500', bgColor: 'bg-rose-500/10' },
+  IT: { icon: LifeBuoy, color: 'text-cyan-500', bgColor: 'bg-cyan-500/10' },
   SALES: { icon: ShoppingBag, color: 'text-blue-500', bgColor: 'bg-blue-500/10' },
   SUPPORT: { icon: Headphones, color: 'text-teal-500', bgColor: 'bg-teal-500/10' },
   EMPLOYEE: { icon: UserCheck, color: 'text-emerald-500', bgColor: 'bg-emerald-500/10' },
