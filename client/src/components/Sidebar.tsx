@@ -77,7 +77,13 @@ export default function Sidebar({
     { name: 'Offboarding', path: '/offboarding', icon: UserMinus, show: hasPermission('offboarding', 'view') || hasPermission('offboarding', 'request') },
     { name: 'Attendance', path: '/attendance', icon: Clock, show: true },
     { name: 'Audit Logs', path: '/audit-logs', icon: ScrollText, show: hasPermission('audit', 'view') },
-    // ─── New Modules from main branch ───────────────────────
+    // ─── Inventory & Operations ─────────────────────────────
+    { name: 'Inventory', path: '/inventory', icon: Package, show: true },
+    { name: 'Warehouses', path: '/inventory/warehouses', icon: Building2, show: true },
+    { name: 'Calendar', path: '/calendar', icon: CalendarRange, show: true },
+    { name: 'Reports', path: '/reports', icon: CheckSquare, show: true },
+    { name: 'Messages', path: '/messages', icon: CheckSquare, show: true },
+    // ─── Recruitment & Commercial ───────────────────────────
     { name: 'Careers', path: '/careers', icon: Briefcase, show: true },
     { name: 'Recruitment', path: '/recruitment/postings', icon: Contact2, show: hasPermission('employee_records', 'create') },
     { name: 'Catalog', path: '/catalog', icon: Package, show: true },

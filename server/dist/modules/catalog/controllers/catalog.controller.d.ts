@@ -1,0 +1,21 @@
+import { Request, Response } from 'express';
+export declare const getCategories: (req: Request, res: Response) => Promise<void>;
+export declare const createCategory: (req: Request, res: Response) => Promise<void>;
+export declare const addSubcategory: (req: Request, res: Response) => Promise<void>;
+export declare const deleteCategory: (req: Request, res: Response) => Promise<void>;
+export declare const getProducts: (req: Request, res: Response) => Promise<void>;
+export declare const getProductById: (req: Request, res: Response) => Promise<void>;
+export declare const createProduct: (req: Request, res: Response) => Promise<void>;
+export declare const updateProduct: (req: Request, res: Response) => Promise<void>;
+export declare const deleteProduct: (req: Request, res: Response) => Promise<void>;
+export declare const createVariant: (req: Request, res: Response) => Promise<void>;
+export declare const deleteVariant: (req: Request, res: Response) => Promise<void>;
+export declare const createSku: (req: Request, res: Response) => Promise<void>;
+export declare const updateSku: (req: Request, res: Response) => Promise<void>;
+export declare const deleteSku: (req: Request, res: Response) => Promise<void>;
+export declare const createPrice: (req: Request, res: Response) => Promise<void>;
+export declare const deletePrice: (req: Request, res: Response) => Promise<void>;
+export declare const getBundles: (req: Request, res: Response) => Promise<void>;
+export declare const createBundle: (req: Request, res: Response) => Promise<void>;
+export declare const deleteBundle: (req: Request, res: Response) => Promise<void>;
+//# sourceMappingURL=catalog.controller.d.ts.map

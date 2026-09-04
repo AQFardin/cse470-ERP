@@ -572,3 +572,87 @@ export async function updateProjectChunkAPI(chunkId: string, data: {
   };
 }
 
+// ─── Notifications ─────────────────────────────────────
+
+export interface Notification {
+  id: string;
+  employeeId: string;
+  title: string;
+  message: string;
+  type: 'INFO' | 'SUCCESS' | 'WARNING' | 'ALERT';
+  isRead: boolean;
+  createdAt: string;
+}
+
+export interface NotificationPreferences {
+  id: string;
+  employeeId: string;
+  pushEnabled: boolean;
+  emailEnabled: boolean;
+  smsEnabled: boolean;
+  updatedAt: string;
+}
+
+export async function fetchNotifications(
+  employeeId: string
+): Promise<Notification[]> {
+  return fetchJSON(
+    `/notifications?employeeId=${encodeURIComponent(employeeId)}`
+  );
+}
+
+export async function markNotificationRead(
+  id: string
+): Promise<Notification> {
+  return fetchJSON(`/notifications/${id}/read`, {
+    method: 'PATCH',
+  });
+}
+export async function getPushPublicKey(): Promise<{ publicKey: string }> {
+  return fetchJSON('/notifications/push/public-key');
+}
+
+export async function savePushSubscription(
+  employeeId: string,
+  subscription: PushSubscription
+) {
+  return fetchJSON('/notifications/push/subscribe', {
+    method: 'POST',
+    body: JSON.stringify({
+      employeeId,
+      subscription: subscription.toJSON(),
+    }),
+  });
+}
+
+export async function createNotification(data: {
+  employeeId: string;
+  title: string;
+  message: string;
+  type: Notification['type'];
+}): Promise<Notification> {
+  return fetchJSON('/notifications', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function fetchNotificationPreferences(
+  employeeId: string
+): Promise<NotificationPreferences> {
+  return fetchJSON(`/notifications/preferences/${employeeId}`);
+}
+
+export async function updateNotificationPreferences(
+  employeeId: string,
+  data: {
+    pushEnabled?: boolean;
+    emailEnabled?: boolean;
+    smsEnabled?: boolean;
+  }
+): Promise<NotificationPreferences> {
+  return fetchJSON(`/notifications/preferences/${employeeId}`, {
+    method: 'PATCH',
+    body: JSON.stringify(data),
+  });
+}
