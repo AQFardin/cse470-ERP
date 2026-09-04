@@ -1,0 +1,6 @@
+{
+  "name": "Employee Management System",
+  "description": "A responsive and interactive employee management system, featuring tabular views, filters, and dynamic record editing.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

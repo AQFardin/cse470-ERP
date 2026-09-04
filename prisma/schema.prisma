@@ -1,0 +1,1928 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../server/node_modules/.prisma/client"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+// ─── Enums ──────────────────────────────────────────────
+
+enum Role {
+  MANAGER
+  EMPLOYEE
+}
+
+enum SystemRole {
+  ADMIN
+  PROJECT_MANAGER
+  MANAGER
+  HR
+  SALES
+  SUPPORT
+  EMPLOYEE
+  VENDOR
+}
+
+enum EmployeeStatus {
+  ACTIVE
+  ON_LEAVE
+  INACTIVE
+}
+
+enum Department {
+  ENGINEERING
+  HR
+  FINANCE
+  MARKETING
+  SALES
+  OPERATIONS
+}
+
+enum LeaveType {
+  SICK
+  VACATION
+  PERSONAL
+  MATERNITY
+  UNPAID
+  EXTENDED
+  LEGAL
+  OTHER
+}
+
+enum LeaveStatus {
+  PENDING
+  APPROVED
+  DENIED
+}
+
+enum TaskPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum TaskStatus {
+  TODO
+  IN_PROGRESS
+  COMPLETED
+  OVERDUE
+}
+
+enum AuditAction {
+  CREATE
+  UPDATE
+  DELETE
+}
+
+enum OffboardStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  COMPLETED
+}
+
+enum AttendanceStatus {
+  PRESENT
+  ABSENT
+  HALF_DAY
+  REMOTE
+}
+
+enum TicketCategory {
+  INTERNAL_IT
+  MANAGER_ASSIST
+  CUSTOMER_SUPPORT
+}
+
+enum TicketStatus {
+  OPEN
+  IN_PROGRESS
+  RESOLVED
+  CLOSED
+}
+
+enum TicketPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum ProjectStatus {
+  PLANNING
+  ACTIVE
+  ON_HOLD
+  COMPLETED
+}
+
+// ─── RBAC Models ────────────────────────────────────────
+
+model User {
+  id           String     @id @default(uuid())
+  email        String     @unique
+  name         String
+  passwordHash String     @default("") @map("password_hash")
+  employeeId   String?    @unique @map("employee_id")
+  isActive     Boolean    @default(true) @map("is_active")
+  createdAt    DateTime   @default(now()) @map("created_at")
+
+  // Relations
+  employee        Employee?  @relation(fields: [employeeId], references: [id])
+  roles           UserRole[]
+  auditLogs       AuditLog[]
+  raisedTickets   Ticket[]   @relation("RaisedTickets")
+  assignedTickets Ticket[]   @relation("AssignedTickets")
+  createdProjects Project[]
+  createdJournalEntries JournalEntry[] @relation("JournalCreatedBy")
+  postedJournalEntries  JournalEntry[] @relation("JournalPostedBy")
+
+  createdApBills     VendorBill[]     @relation("ApBillCreatedBy")
+  approvedApBills    VendorBill[]     @relation("ApBillApprovedBy")
+  createdApPayments  VendorPayment[]  @relation("ApPaymentCreatedBy")
+  reversedApPayments VendorPayment[]  @relation("ApPaymentReversedBy")
+
+  createdArInvoices CustomerInvoice[] @relation("ArInvoiceCreatedBy")
+  issuedArInvoices  CustomerInvoice[] @relation("ArInvoiceIssuedBy")
+  createdArPayments CustomerPayment[] @relation("ArPaymentCreatedBy")
+  reversedArPayments CustomerPayment[] @relation("ArPaymentReversedBy")
+
+  createdEmployeeSalaries EmployeeSalary[]    @relation("PayrollSalaryCreatedBy")
+  createdPayrollPeriods   PayrollPeriod[]     @relation("PayrollPeriodCreatedBy")
+  approvedPayrollPeriods  PayrollPeriod[]     @relation("PayrollPeriodApprovedBy")
+  createdPayrollBonuses   PayrollBonus[]      @relation("PayrollBonusCreatedBy")
+  approvedPayrollBonuses  PayrollBonus[]      @relation("PayrollBonusApprovedBy")
+  createdPayrollDeductions  PayrollDeduction[] @relation("PayrollDeductionCreatedBy")
+  approvedPayrollDeductions PayrollDeduction[] @relation("PayrollDeductionApprovedBy")
+  createdPayrollPayments  PayrollPayment[]    @relation("PayrollPaymentCreatedBy")
+  reversedPayrollPayments PayrollPayment[]    @relation("PayrollPaymentReversedBy")
+
+  createdBudgets   Budget[] @relation("BudgetCreatedBy")
+  submittedBudgets Budget[] @relation("BudgetSubmittedBy")
+  approvedBudgets  Budget[] @relation("BudgetApprovedBy")
+  activatedBudgets Budget[] @relation("BudgetActivatedBy")
+
+  createdTaxPeriods   TaxPeriod[] @relation("TaxPeriodCreatedBy")
+  reviewedTaxPeriods  TaxPeriod[] @relation("TaxPeriodReviewedBy")
+  finalizedTaxPeriods TaxPeriod[] @relation("TaxPeriodFinalizedBy")
+  filedTaxPeriods     TaxPeriod[] @relation("TaxPeriodFiledBy")
+  createdTaxPayments  TaxPayment[] @relation("TaxPaymentCreatedBy")
+  reversedTaxPayments TaxPayment[] @relation("TaxPaymentReversedBy")
+
+  notifications      Notification[]  @relation("NotificationRecipient")
+  closedFiscalPeriods   FiscalPeriod[] @relation("FiscalPeriodClosedBy")
+  reopenedFiscalPeriods FiscalPeriod[] @relation("FiscalPeriodReopenedBy")
+  createdFiscalPeriods  FiscalPeriod[] @relation("FiscalPeriodCreatedBy")
+
+  @@map("users")
+}
+
+model Permission {
+  id     String @id @default(uuid())
+  module String
+  action String
+
+  // Relations
+  rolePermissions RolePermission[]
+
+  @@unique([module, action])
+  @@map("permissions")
+}
+
+model RolePermission {
+  id           String     @id @default(uuid())
+  role         SystemRole
+  permissionId String     @map("permission_id")
+
+  // Relations
+  permission   Permission @relation(fields: [permissionId], references: [id])
+
+  @@unique([role, permissionId])
+  @@map("role_permissions")
+}
+
+model UserRole {
+  id     String     @id @default(uuid())
+  userId String     @map("user_id")
+  role   SystemRole
+
+  // Relations
+  user   User       @relation(fields: [userId], references: [id])
+
+  @@unique([userId, role])
+  @@map("user_roles")
+}
+
+model AuditLog {
+  id             String      @id @default(uuid())
+  actorId        String      @map("actor_id")
+  action         AuditAction
+  targetEntity   String      @map("target_entity")
+  targetId       String      @map("target_id")
+  beforeSnapshot String?     @map("before_snapshot") // JSON string
+  afterSnapshot  String?     @map("after_snapshot")  // JSON string
+  timestamp      DateTime    @default(now())
+
+  // Relations
+  actor          User        @relation(fields: [actorId], references: [id])
+
+  @@map("audit_logs")
+}
+
+// ─── Core Models ────────────────────────────────────────
+
+model Employee {
+  id                  String         @id @default(uuid())
+  employeeId          String         @unique @map("employee_id")
+  firstName           String         @map("first_name")
+  lastName            String         @map("last_name")
+  email               String         @unique
+  phoneNumber         String?        @map("phone_number")
+  department          Department
+  position            String
+  role                Role           @default(EMPLOYEE)
+  hireDate            DateTime       @map("hire_date")
+  status              EmployeeStatus @default(ACTIVE)
+  address             String?
+  region              String?        // Statutory/tax jurisdiction — drives regional payroll tax rule resolution
+  avatarUrl           String?        @map("avatar_url")
+  reportingManagerId  String?        @map("reporting_manager_id")
+  createdAt           DateTime       @default(now()) @map("created_at")
+  updatedAt           DateTime       @updatedAt @map("updated_at")
+  
+  // Relations
+  reportingManager   Employee?        @relation("ReportingLine", fields: [reportingManagerId], references: [id])
+  directReports      Employee[]       @relation("ReportingLine")
+  user               User?
+  leaveRequests      LeaveRequest[]   @relation("EmployeeLeaves")
+  reviewedLeaves     LeaveRequest[]   @relation("ReviewerLeaves")
+  approverForLeaves  LeaveRequest[]   @relation("ApproverLeaves")
+  assignedTasks      TaskAssignment[] @relation("AssignedTasks")
+  createdTasks       TaskAssignment[] @relation("CreatedTasks")
+  postedJobs         JobPosting[]     @relation("PostedJobs")
+  statusChanges      ApplicationStatusHistory[] @relation("StatusChanges")
+  offboardRequests   OffboardRequest[] @relation("OffboardedEmployee")
+  leaveBalances      LeaveBalance[]
+  attendanceLogs     AttendanceLog[]
+  pmProjects         Project[]        @relation("PMProjects")
+  managedChunks      ProjectChunk[]   @relation("ChunkManager")
+  salesPipelines     SalesPipeline[]  @relation("SalesPipelines")
+  salesReports       SalesReport[]    @relation("SalesReports")
+  salaries           EmployeeSalary[]
+  payrollRecords     PayrollRecord[]
+  payrollBonuses     PayrollBonus[]
+  payrollDeductions  PayrollDeduction[]
+
+  @@map("employees")
+}
+
+model LeaveRequest {
+  id           String      @id @default(uuid())
+  employeeId   String      @map("employee_id")
+  type         LeaveType
+  startDate    DateTime    @map("start_date")
+  endDate      DateTime    @map("end_date")
+  reason       String
+  status       LeaveStatus @default(PENDING)
+  reviewedById String?     @map("reviewed_by_id")
+  reviewedAt   DateTime?   @map("reviewed_at")
+  approverId   String?     @map("approver_id") // Dynamically determined approver
+  createdAt    DateTime    @default(now()) @map("created_at")
+
+  // Relations
+  employee   Employee  @relation("EmployeeLeaves", fields: [employeeId], references: [id])
+  reviewedBy Employee? @relation("ReviewerLeaves", fields: [reviewedById], references: [id])
+  approver   Employee? @relation("ApproverLeaves", fields: [approverId], references: [id])
+
+  @@map("leave_requests")
+}
+
+model TaskAssignment {
+  id             String        @id @default(uuid())
+  title          String
+  description    String?
+  assignedToId   String        @map("assigned_to_id")
+  assignedById   String        @map("assigned_by_id")
+  priority       TaskPriority  @default(MEDIUM)
+  status         TaskStatus    @default(TODO)
+  deadline       DateTime
+  projectId      String?       @map("project_id")
+  projectChunkId String?       @map("project_chunk_id")
+  milestone      String?
+  createdAt      DateTime      @default(now()) @map("created_at")
+  updatedAt      DateTime      @updatedAt @map("updated_at")
+
+  // Relations
+  assignedTo   Employee      @relation("AssignedTasks", fields: [assignedToId], references: [id])
+  assignedBy   Employee      @relation("CreatedTasks", fields: [assignedById], references: [id])
+  project      Project?      @relation(fields: [projectId], references: [id])
+  projectChunk ProjectChunk? @relation(fields: [projectChunkId], references: [id])
+
+  @@map("task_assignments")
+}
+
+// ─── Help Desk / Ticketing ──────────────────────────────
+
+model Ticket {
+  id           String         @id @default(uuid())
+  title        String
+  description  String
+  category     TicketCategory
+  status       TicketStatus   @default(OPEN)
+  priority     TicketPriority @default(MEDIUM)
+  raisedById   String         @map("raised_by_id")
+  assignedToId String?        @map("assigned_to_id")
+  createdAt    DateTime       @default(now()) @map("created_at")
+  updatedAt    DateTime       @updatedAt @map("updated_at")
+
+  // Relations
+  raisedBy   User  @relation("RaisedTickets", fields: [raisedById], references: [id])
+  assignedTo User? @relation("AssignedTickets", fields: [assignedToId], references: [id])
+
+  @@map("tickets")
+}
+
+// ─── Project Management ─────────────────────────────────
+
+model Project {
+  id               String        @id @default(uuid())
+  name             String
+  description      String?
+  department       Department
+  status           ProjectStatus @default(ACTIVE)
+  startDate        DateTime      @map("start_date")
+  endDate          DateTime?     @map("end_date")
+  projectManagerId String?       @map("project_manager_id")
+  createdById      String        @map("created_by_id")
+  createdAt        DateTime      @default(now()) @map("created_at")
+  updatedAt        DateTime      @updatedAt @map("updated_at")
+
+  // Relations
+  createdBy      User             @relation(fields: [createdById], references: [id])
+  projectManager Employee?        @relation("PMProjects", fields: [projectManagerId], references: [id])
+  chunks         ProjectChunk[]
+  tasks          TaskAssignment[]
+
+  @@map("projects")
+}
+
+model ProjectChunk {
+  id                 String         @id @default(uuid())
+  title              String
+  description        String?
+  projectId          String         @map("project_id")
+  assignedDepartment Department     @map("assigned_department")
+  assignedManagerId  String?        @map("assigned_manager_id")
+  status             ProjectStatus  @default(ACTIVE)
+  createdAt          DateTime       @default(now()) @map("created_at")
+  updatedAt          DateTime       @updatedAt @map("updated_at")
+
+  // Relations
+  project         Project          @relation(fields: [projectId], references: [id])
+  assignedManager Employee?        @relation("ChunkManager", fields: [assignedManagerId], references: [id])
+  tasks           TaskAssignment[]
+
+  @@map("project_chunks")
+}
+
+// ─── Offboarding ────────────────────────────────────────
+
+model OffboardRequest {
+  id             String         @id @default(uuid())
+  employeeId     String         @map("employee_id")
+  requestedById  String         @map("requested_by_id") // User ID
+  reason         String
+  status         OffboardStatus @default(PENDING)
+  reviewedById   String?        @map("reviewed_by_id") // User ID
+  reviewedAt     DateTime?      @map("reviewed_at")
+  effectiveDate  DateTime       @map("effective_date")
+  createdAt      DateTime       @default(now()) @map("created_at")
+
+  // Relations
+  employee       Employee       @relation("OffboardedEmployee", fields: [employeeId], references: [id])
+
+  @@map("offboard_requests")
+}
+
+// ─── Leave Balances ─────────────────────────────────────
+
+model LeaveBalance {
+  id         String    @id @default(uuid())
+  employeeId String    @map("employee_id")
+  leaveType  LeaveType @map("leave_type")
+  balance    Float     @default(0)
+  year       Int
+
+  // Relations
+  employee   Employee  @relation(fields: [employeeId], references: [id])
+
+  @@unique([employeeId, leaveType, year])
+  @@map("leave_balances")
+}
+
+// ─── Attendance ─────────────────────────────────────────
+
+model AttendanceLog {
+  id           String           @id @default(uuid())
+  employeeId   String           @map("employee_id")
+  date         DateTime
+  clockIn      DateTime?        @map("clock_in")
+  clockOut     DateTime?        @map("clock_out")
+  hoursWorked  Float?           @map("hours_worked")
+  status       AttendanceStatus @default(PRESENT)
+  createdAt    DateTime         @default(now()) @map("created_at")
+
+  // Relations
+  employee     Employee         @relation(fields: [employeeId], references: [id])
+
+  @@unique([employeeId, date])
+  @@map("attendance_logs")
+}
+
+// ─── Recruitment Module ─────────────────────────────────
+
+enum JobPostingStatus {
+  ACTIVE
+  CLOSED
+}
+
+enum ApplicationStatus {
+  APPLIED
+  UNDER_REVIEW
+  INTERVIEW
+  OFFER
+  REJECTED
+  HIRED
+}
+
+model JobPosting {
+  id           String            @id @default(uuid())
+  title        String
+  description  String
+  requirements String
+  location     String
+  department   Department
+  status       JobPostingStatus  @default(ACTIVE)
+  datePosted   DateTime          @default(now()) @map("date_posted")
+  dateClosed   DateTime?         @map("date_closed")
+
+  postedById   String            @map("posted_by_id")
+  postedBy     Employee          @relation("PostedJobs", fields: [postedById], references: [id])
+
+  applications Application[]
+
+  @@map("job_postings")
+}
+
+model Applicant {
+  id          String        @id @default(uuid())
+  name        String
+  email       String
+  phone       String?
+  resumeUrl   String        @map("resume_url")
+  coverLetter String?       @map("cover_letter")
+  accessToken String        @unique @default(uuid()) @map("access_token")
+  createdAt   DateTime      @default(now()) @map("created_at")
+
+  applications Application[]
+
+  @@map("applicants")
+}
+
+model Application {
+  id            String                     @id @default(uuid())
+  applicantId   String                     @map("applicant_id")
+  jobPostingId  String                     @map("job_posting_id")
+  status        ApplicationStatus          @default(APPLIED)
+  dateApplied   DateTime                   @default(now()) @map("date_applied")
+  updatedAt     DateTime                   @updatedAt @map("updated_at")
+
+  applicant     Applicant                  @relation(fields: [applicantId], references: [id])
+  jobPosting    JobPosting                 @relation(fields: [jobPostingId], references: [id])
+  statusHistory ApplicationStatusHistory[]
+
+  @@unique([applicantId, jobPostingId])
+  @@map("applications")
+}
+
+model ApplicationStatusHistory {
+  id            String             @id @default(uuid())
+  applicationId String             @map("application_id")
+  oldStatus     ApplicationStatus?
+  newStatus     ApplicationStatus
+  changedById   String?            @map("changed_by_id")
+  timestamp     DateTime           @default(now())
+
+  application   Application        @relation(fields: [applicationId], references: [id])
+  changedBy     Employee?          @relation("StatusChanges", fields: [changedById], references: [id])
+
+  @@map("application_status_history")
+}
+
+// ─── Product & Item Catalog Module ──────────────────────
+
+model Category {
+  id          String  @id @default(uuid())
+  name        String
+  description String?
+
+  parentId      String?    @map("parent_id")
+  parent        Category?  @relation("CategoryHierarchy", fields: [parentId], references: [id])
+  subcategories Category[] @relation("CategoryHierarchy")
+
+  products Product[]
+
+  @@map("categories")
+}
+
+model Product {
+  id          String @id @default(uuid())
+  name        String
+  description String
+  status      String @default("ACTIVE") // e.g. ACTIVE, DISCONTINUED, DRAFT
+  brand       String
+
+  categoryId String   @map("category_id")
+  category   Category @relation(fields: [categoryId], references: [id])
+
+  variants ProductVariant[]
+  bundles  BundleProduct[]
+  apBillItems     VendorBillItem[]
+  arInvoiceItems  CustomerInvoiceItem[]
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("products")
+}
+
+model ProductVariant {
+  id          String @id @default(uuid())
+  variantName String @map("variant_name")
+
+  productId String  @map("product_id")
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  attributes VariantAttribute[]
+  skus       SKU[]
+  prices     Price[]
+
+  @@map("product_variants")
+}
+
+model VariantAttribute {
+  id             String @id @default(uuid())
+  attributeName  String @map("attribute_name")
+  attributeValue String @map("attribute_value")
+
+  variantId String         @map("variant_id")
+  variant   ProductVariant @relation(fields: [variantId], references: [id], onDelete: Cascade)
+
+  @@map("variant_attributes")
+}
+
+model SKU {
+  id       String @id @default(uuid())
+  skuCode  String @unique @map("sku_code")
+  quantity Int    @default(0)
+  status   String @default("IN_STOCK") // IN_STOCK, OUT_OF_STOCK, DISCONTINUED
+
+  variantId  String         @map("variant_id")
+  variant    ProductVariant @relation(fields: [variantId], references: [id], onDelete: Cascade)
+  orderItems OrderItem[]
+
+  @@map("skus")
+}
+
+model Price {
+  id            String    @id @default(uuid())
+  amount        Decimal
+  currency      String    @default("USD")
+  priceType     String    @map("price_type") // RETAIL, WHOLESALE, REGIONAL
+  region        String? // used when priceType is REGIONAL
+  effectiveDate DateTime  @map("effective_date")
+  expiryDate    DateTime? @map("expiry_date")
+
+  variantId String         @map("variant_id")
+  variant   ProductVariant @relation(fields: [variantId], references: [id], onDelete: Cascade)
+
+  @@map("prices")
+}
+
+model ProductBundle {
+  id             String  @id @default(uuid())
+  name           String
+  description    String?
+  status         String  @default("ACTIVE")
+  bundleDiscount Decimal @map("bundle_discount")
+
+  products BundleProduct[]
+
+  @@map("product_bundles")
+}
+
+model BundleProduct {
+  id        String        @id @default(uuid())
+  bundleId  String        @map("bundle_id")
+  bundle    ProductBundle @relation(fields: [bundleId], references: [id], onDelete: Cascade)
+  productId String        @map("product_id")
+  product   Product       @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([bundleId, productId])
+  @@map("bundle_products")
+}
+
+// ─── CRM Module ──────────────────────────────────────────
+
+enum LeadSource {
+  WEBSITE
+  REFERRAL
+  COLD_CALL
+  SOCIAL_MEDIA
+  EVENT
+  OTHER
+}
+
+enum LeadStatus {
+  NEW
+  CONTACTED
+  QUALIFIED
+  LOST
+  CONVERTED
+}
+
+enum PipelineStage {
+  PROSPECTING
+  QUALIFICATION
+  PROPOSAL
+  NEGOTIATION
+  CLOSED_WON
+  CLOSED_LOST
+}
+
+enum InteractionType {
+  CALL
+  EMAIL
+  MEETING
+  NOTE
+}
+
+model Customer {
+  id         String  @id @default(uuid())
+  customerId String  @unique @map("customer_id")
+  name       String
+  email      String  @unique
+  phone      String?
+  address    String?
+  region     String? // Tax jurisdiction — drives automatic VAT/GST tax code selection
+
+  interactions      InteractionHistory[]
+  pipelines         SalesPipeline[]
+  convertedFromLead Lead?
+  subscriptions     Subscription[]
+  orders            Order[]
+  returnRequests    ReturnRequest[]
+  invoices          CustomerInvoice[]
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("customers")
+}
+
+model Lead {
+  id                String     @id @default(uuid())
+  leadId            String     @unique @map("lead_id")
+  name              String
+  email             String
+  source            LeadSource
+  qualificationStat LeadStatus @default(NEW) @map("qualification_stat")
+  score             Int        @default(0)
+
+  convertedCustomerId String?   @unique @map("converted_customer_id")
+  convertedCustomer   Customer? @relation(fields: [convertedCustomerId], references: [id])
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("leads")
+}
+
+model SalesPipeline {
+  id                String        @id @default(uuid())
+  pipelineId        String        @unique @map("pipeline_id")
+  stage             PipelineStage @default(PROSPECTING)
+  dealValue         Decimal       @map("deal_value")
+  expectedCloseDate DateTime      @map("expected_close_date")
+
+  customerId String   @map("customer_id")
+  customer   Customer @relation(fields: [customerId], references: [id])
+
+  employeeId String   @map("employee_id")
+  employee   Employee @relation("SalesPipelines", fields: [employeeId], references: [id])
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("sales_pipelines")
+}
+
+model InteractionHistory {
+  id            String          @id @default(uuid())
+  interactionId String          @unique @map("interaction_id")
+  date          DateTime
+  type          InteractionType
+  notes         String?
+
+  customerId String   @map("customer_id")
+  customer   Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@map("interaction_histories")
+}
+
+model SalesReport {
+  id          String  @id @default(uuid())
+  reportId    String  @unique @map("report_id")
+  period      String // e.g. "2026-Q3", "2026-08"
+  region      String
+  revenue     Decimal @default(0)
+  dealsClosed Int     @default(0) @map("deals_closed")
+  dealsLost   Int     @default(0) @map("deals_lost")
+
+  employeeId String   @map("employee_id")
+  employee   Employee @relation("SalesReports", fields: [employeeId], references: [id])
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("sales_reports")
+}
+
+// ─── Subscription & Membership Management Module ────────
+
+model MembershipPlan {
+  id                  String  @id @default(uuid())
+  name                String
+  tier                String
+  price               Decimal
+  billingIntervalDays Int     @default(30) @map("billing_interval_days")
+
+  subscriptions Subscription[]
+
+  @@map("membership_plans")
+}
+
+model Subscription {
+  id        String   @id @default(uuid())
+  startDate DateTime @map("start_date")
+  status    String   @default("ACTIVE") // ACTIVE, CANCELLED, PAST_DUE, EXPIRED
+  autoRenew Boolean  @default(true) @map("auto_renew")
+
+  customerId String   @map("customer_id")
+  customer   Customer @relation(fields: [customerId], references: [id])
+
+  planId String         @map("plan_id")
+  plan   MembershipPlan @relation(fields: [planId], references: [id])
+
+  billingCycles  BillingCycle[]
+  renewalNotices RenewalNotice[]
+  planChanges    SubscriptionPlanChange[]
+
+  @@map("subscriptions")
+}
+
+model BillingCycle {
+  id          String   @id @default(uuid())
+  billingDate DateTime @map("billing_date")
+  amount      Decimal
+  status      String   @default("PENDING") // PENDING, PAID, FAILED
+
+  subscriptionId String       @map("subscription_id")
+  subscription   Subscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+
+  @@map("billing_cycles")
+}
+
+model RenewalNotice {
+  id          String   @id @default(uuid())
+  noticeType  String   @map("notice_type") // UPCOMING_RENEWAL, PAYMENT_FAILURE
+  sentDate    DateTime @map("sent_date")
+  renewalDate DateTime @map("renewal_date")
+
+  subscriptionId String       @map("subscription_id")
+  subscription   Subscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+
+  @@map("renewal_notices")
+}
+
+model SubscriptionPlanChange {
+  id             String   @id @default(uuid())
+  changeDate     DateTime @default(now()) @map("change_date")
+  fromPlanId     String?  @map("from_plan_id")
+  toPlanId       String   @map("to_plan_id")
+  proratedAmount Decimal  @map("prorated_amount")
+
+  subscriptionId String       @map("subscription_id")
+  subscription   Subscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+
+  @@map("subscription_plan_changes")
+}
+
+// ─── Returns & Refunds Management Module ────────────────
+
+model Order {
+  id          String   @id @default(uuid())
+  orderDate   DateTime @default(now()) @map("order_date")
+  totalAmount Decimal  @map("total_amount")
+
+  customerId String   @map("customer_id")
+  customer   Customer @relation(fields: [customerId], references: [id])
+
+  items          OrderItem[]
+  returnRequests ReturnRequest[]
+
+  @@map("orders")
+}
+
+model OrderItem {
+  id       String  @id @default(uuid())
+  quantity Int
+  price    Decimal
+
+  orderId String @map("order_id")
+  order   Order  @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  skuId String @map("sku_id")
+  sku   SKU    @relation(fields: [skuId], references: [id])
+
+  returnRequests ReturnRequest[]
+
+  @@map("order_items")
+}
+
+model ReturnRequest {
+  id      String   @id @default(uuid())
+  reason  String
+  status  String   @default("PENDING") // PENDING, APPROVED, REJECTED
+  reqDate DateTime @default(now()) @map("req_date")
+
+  customerId String   @map("customer_id")
+  customer   Customer @relation(fields: [customerId], references: [id])
+
+  orderId String @map("order_id")
+  order   Order  @relation(fields: [orderId], references: [id])
+
+  orderItemId String    @map("order_item_id")
+  orderItem   OrderItem @relation(fields: [orderItemId], references: [id])
+
+  refundTransaction RefundTransaction?
+  creditNote        CreditNote?
+
+  @@map("return_requests")
+}
+
+model RefundTransaction {
+  id         String   @id @default(uuid())
+  amount     Decimal
+  refundDate DateTime @default(now()) @map("refund_date")
+  method     String   @default("ORIGINAL_PAYMENT")
+
+  returnRequestId String        @unique @map("return_request_id")
+  returnRequest   ReturnRequest @relation(fields: [returnRequestId], references: [id], onDelete: Cascade)
+
+  @@map("refund_transactions")
+}
+
+model CreditNote {
+  id        String   @id @default(uuid())
+  amount    Decimal
+  issueDate DateTime @default(now()) @map("issue_date")
+
+  returnRequestId String        @unique @map("return_request_id")
+  returnRequest   ReturnRequest @relation(fields: [returnRequestId], references: [id], onDelete: Cascade)
+
+  @@map("credit_notes")
+}
+
+// ─── General Ledger Module ───────────────────────────────
+// The core double-entry accounting foundation. Future financial
+// modules (AP/AR, Payroll, Budgeting, Compliance/Tax) post their
+// accounting entries through ledger.service.ts's createJournalEntry()
+// rather than writing to these tables directly.
+
+enum AccountType {
+  ASSET
+  LIABILITY
+  EQUITY
+  REVENUE
+  EXPENSE
+}
+
+enum JournalStatus {
+  DRAFT
+  POSTED
+  LOCKED
+}
+
+model Account {
+  id            String      @id @default(uuid())
+  code          String      @unique
+  name          String
+  type          AccountType
+  description   String?
+  isActive      Boolean     @default(true) @map("is_active")
+  isCashAccount Boolean     @default(false) @map("is_cash_account") // Cash/bank accounts — drives Cash Flow Statement classification
+  createdAt   DateTime    @default(now()) @map("created_at")
+  updatedAt   DateTime    @updatedAt @map("updated_at")
+
+  parentId String?   @map("parent_id")
+  parent   Account?  @relation("AccountHierarchy", fields: [parentId], references: [id])
+  children Account[] @relation("AccountHierarchy")
+
+  journalLines JournalLine[]
+
+  accountMappings      AccountMapping[]
+  apBillExpenseLines   VendorBill[]      @relation("ApBillExpenseAccount")
+  apBillPayableLines   VendorBill[]      @relation("ApBillPayableAccount")
+  apPaymentBankLines   VendorPayment[]   @relation("ApPaymentBankAccount")
+  arInvoiceRevenueLines    CustomerInvoice[] @relation("ArInvoiceRevenueAccount")
+  arInvoiceReceivableLines CustomerInvoice[] @relation("ArInvoiceReceivableAccount")
+  arPaymentBankLines       CustomerPayment[] @relation("ArPaymentBankAccount")
+  payrollPaymentBankLines  PayrollPayment[]  @relation("PayrollPaymentBankAccount")
+  budgetLines              BudgetLine[]
+  taxPaymentBankLines      TaxPayment[]      @relation("TaxPaymentBankAccount")
+
+  @@index([type])
+  @@map("gl_accounts")
+}
+
+model JournalEntry {
+  id              String        @id @default(uuid())
+  entryNumber     String        @unique @map("entry_number")
+  transactionDate DateTime      @map("transaction_date")
+  description     String
+  currency        String        @default("BDT")
+  status          JournalStatus @default(DRAFT)
+
+  createdById String   @map("created_by_id")
+  createdBy   User     @relation("JournalCreatedBy", fields: [createdById], references: [id])
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  postedById String?   @map("posted_by_id")
+  postedBy   User?     @relation("JournalPostedBy", fields: [postedById], references: [id])
+  postedAt   DateTime? @map("posted_at")
+
+  lockedAt DateTime? @map("locked_at")
+
+  // A posted/locked entry may have exactly one reversing entry pointing back at it.
+  reversalOfId String?       @unique @map("reversal_of_id")
+  reversalOf   JournalEntry? @relation("JournalReversal", fields: [reversalOfId], references: [id])
+  reversedBy   JournalEntry? @relation("JournalReversal")
+
+  // Optional client-supplied key to reject duplicate submissions of the same request.
+  idempotencyKey String? @unique @map("idempotency_key")
+
+  // Reverse side of the AP/AR modules' one-to-one links to the GL entry they posted.
+  apBill    VendorBill?
+  apPayment VendorPayment?
+  arInvoice CustomerInvoice?
+  arPayment CustomerPayment?
+  payrollPeriod  PayrollPeriod?
+  payrollPayment PayrollPayment?
+  taxPayment     TaxPayment?
+
+  lines JournalLine[]
+
+  @@index([status])
+  @@index([transactionDate])
+  @@map("gl_journal_entries")
+}
+
+model JournalLine {
+  id          String   @id @default(uuid())
+  description String?
+  debit       Decimal  @default(0)
+  credit      Decimal  @default(0)
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  journalEntryId String       @map("journal_entry_id")
+  journalEntry   JournalEntry @relation(fields: [journalEntryId], references: [id], onDelete: Cascade)
+
+  accountId String  @map("account_id")
+  account   Account @relation(fields: [accountId], references: [id], onDelete: Restrict)
+
+  @@index([accountId])
+  @@index([journalEntryId])
+  @@map("gl_journal_lines")
+}
+
+// ─── Financial Management Module — Accounts Payable / Receivable ─
+// Built on top of the General Ledger module above: every posting
+// action here calls ledger.service.ts's postAccountingEntry()/
+// reverseJournalEntry() rather than writing gl_* tables directly.
+
+enum ApBillStatus {
+  DRAFT
+  APPROVED
+  PARTIALLY_PAID
+  PAID
+  CANCELLED
+}
+
+enum ArInvoiceStatus {
+  DRAFT
+  ISSUED
+  PARTIALLY_PAID
+  PAID
+  CANCELLED
+}
+
+enum PaymentMethod {
+  CASH
+  BANK_TRANSFER
+  CHEQUE
+  CARD
+  MOBILE_PAYMENT
+  OTHER
+}
+
+enum PaymentRecordStatus {
+  POSTED
+  REVERSED
+}
+
+// Small, explicit configuration mechanism so AP/AR resolve the AP/AR
+// control accounts from the Chart of Accounts instead of hard-coding IDs.
+enum AccountMappingKey {
+  ACCOUNTS_PAYABLE
+  ACCOUNTS_RECEIVABLE
+  SALARY_EXPENSE
+  BONUS_EXPENSE
+  TAX_PAYABLE
+  OTHER_DEDUCTION_PAYABLE
+  SALARY_PAYABLE
+  OUTPUT_VAT_PAYABLE
+  INPUT_VAT_RECOVERABLE
+}
+
+model AccountMapping {
+  id        String            @id @default(uuid())
+  key       AccountMappingKey @unique
+  accountId String            @map("account_id")
+  account   Account           @relation(fields: [accountId], references: [id])
+  updatedAt DateTime          @updatedAt @map("updated_at")
+
+  @@map("account_mappings")
+}
+
+model Vendor {
+  id        String   @id @default(uuid())
+  vendorId  String   @unique @map("vendor_id")
+  name      String
+  email     String?  @unique
+  phone     String?
+  address   String?
+  region    String?  // Tax jurisdiction — drives automatic VAT/GST tax code selection
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  bills VendorBill[]
+
+  @@map("vendors")
+}
+
+model VendorBill {
+  id              String       @id @default(uuid())
+  billNumber      String       @unique @map("bill_number")
+  vendorId        String       @map("vendor_id")
+  vendor          Vendor       @relation(fields: [vendorId], references: [id])
+  billDate        DateTime     @map("bill_date")
+  dueDate         DateTime     @map("due_date")
+  referenceNumber String?      @map("reference_number")
+  currency        String       @default("BDT")
+  subtotal        Decimal      @default(0)
+  taxAmount       Decimal      @default(0) @map("tax_amount")
+  discountAmount  Decimal      @default(0) @map("discount_amount")
+  totalAmount     Decimal      @default(0) @map("total_amount")
+  paidAmount      Decimal      @default(0) @map("paid_amount")
+  status          ApBillStatus @default(DRAFT)
+  notes           String?
+
+  // Debit side of the posting (what was purchased) — chosen per bill.
+  expenseAccountId String  @map("expense_account_id")
+  expenseAccount   Account @relation("ApBillExpenseAccount", fields: [expenseAccountId], references: [id])
+  // Credit side (Accounts Payable) — resolved from AccountMapping at creation time.
+  payableAccountId String  @map("payable_account_id")
+  payableAccount   Account @relation("ApBillPayableAccount", fields: [payableAccountId], references: [id])
+
+  // Optional — when set, the Compliance & Tax Engine computes/validates taxAmount
+  // from this code's effective rate (backend-authoritative) and posts a separate
+  // Input VAT Recoverable GL line instead of lumping tax into the expense line.
+  taxCodeId String?  @map("tax_code_id")
+  taxCode   TaxCode? @relation("ApBillTaxCode", fields: [taxCodeId], references: [id])
+
+  createdById String   @map("created_by_id")
+  createdBy   User     @relation("ApBillCreatedBy", fields: [createdById], references: [id])
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  approvedById String?   @map("approved_by_id")
+  approvedBy   User?     @relation("ApBillApprovedBy", fields: [approvedById], references: [id])
+  approvedAt   DateTime? @map("approved_at")
+
+  journalEntryId String?       @unique @map("journal_entry_id")
+  journalEntry   JournalEntry? @relation(fields: [journalEntryId], references: [id])
+
+  items    VendorBillItem[]
+  payments VendorPayment[]
+
+  @@index([status])
+  @@index([dueDate])
+  @@map("ap_vendor_bills")
+}
+
+model VendorBillItem {
+  id           String  @id @default(uuid())
+  vendorBillId String  @map("vendor_bill_id")
+  vendorBill   VendorBill @relation(fields: [vendorBillId], references: [id], onDelete: Cascade)
+  description  String
+  quantity     Decimal @default(1)
+  unitPrice    Decimal @map("unit_price")
+  amount       Decimal
+
+  productId String?  @map("product_id")
+  product   Product? @relation(fields: [productId], references: [id])
+
+  @@map("ap_vendor_bill_items")
+}
+
+model VendorPayment {
+  id              String               @id @default(uuid())
+  paymentNumber   String               @unique @map("payment_number")
+  vendorBillId    String               @map("vendor_bill_id")
+  vendorBill      VendorBill           @relation(fields: [vendorBillId], references: [id])
+  amount          Decimal
+  paymentDate     DateTime             @map("payment_date")
+  paymentMethod   PaymentMethod        @map("payment_method")
+  referenceNumber String?              @map("reference_number")
+  notes           String?
+  status          PaymentRecordStatus  @default(POSTED)
+
+  bankAccountId String  @map("bank_account_id")
+  bankAccount   Account @relation("ApPaymentBankAccount", fields: [bankAccountId], references: [id])
+
+  journalEntryId String?       @unique @map("journal_entry_id")
+  journalEntry   JournalEntry? @relation(fields: [journalEntryId], references: [id])
+
+  createdById String   @map("created_by_id")
+  createdBy   User     @relation("ApPaymentCreatedBy", fields: [createdById], references: [id])
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  reversedById String?   @map("reversed_by_id")
+  reversedBy   User?     @relation("ApPaymentReversedBy", fields: [reversedById], references: [id])
+  reversedAt   DateTime? @map("reversed_at")
+
+  @@map("ap_vendor_payments")
+}
+
+model CustomerInvoice {
+  id              String          @id @default(uuid())
+  invoiceNumber   String          @unique @map("invoice_number")
+  customerId      String          @map("customer_id")
+  customer        Customer        @relation(fields: [customerId], references: [id])
+  invoiceDate     DateTime        @map("invoice_date")
+  dueDate         DateTime        @map("due_date")
+  referenceNumber String?         @map("reference_number")
+  currency        String          @default("BDT")
+  subtotal        Decimal         @default(0)
+  taxAmount       Decimal         @default(0) @map("tax_amount")
+  discountAmount  Decimal         @default(0) @map("discount_amount")
+  totalAmount     Decimal         @default(0) @map("total_amount")
+  paidAmount      Decimal         @default(0) @map("paid_amount")
+  status          ArInvoiceStatus @default(DRAFT)
+  notes           String?
+
+  // Credit side of the posting (what was sold) — chosen per invoice.
+  revenueAccountId String  @map("revenue_account_id")
+  revenueAccount   Account @relation("ArInvoiceRevenueAccount", fields: [revenueAccountId], references: [id])
+  // Debit side (Accounts Receivable) — resolved from AccountMapping at creation time.
+  receivableAccountId String  @map("receivable_account_id")
+  receivableAccount   Account @relation("ArInvoiceReceivableAccount", fields: [receivableAccountId], references: [id])
+
+  // Optional — when set, the Compliance & Tax Engine computes/validates taxAmount
+  // from this code's effective rate and posts a separate Output VAT Payable GL
+  // line instead of lumping tax into the revenue line.
+  taxCodeId String?  @map("tax_code_id")
+  taxCode   TaxCode? @relation("ArInvoiceTaxCode", fields: [taxCodeId], references: [id])
+
+  createdById String   @map("created_by_id")
+  createdBy   User     @relation("ArInvoiceCreatedBy", fields: [createdById], references: [id])
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  issuedById String?   @map("issued_by_id")
+  issuedBy   User?     @relation("ArInvoiceIssuedBy", fields: [issuedById], references: [id])
+  issuedAt   DateTime? @map("issued_at")
+
+  journalEntryId String?       @unique @map("journal_entry_id")
+  journalEntry   JournalEntry? @relation(fields: [journalEntryId], references: [id])
+
+  items    CustomerInvoiceItem[]
+  payments CustomerPayment[]
+
+  @@index([status])
+  @@index([dueDate])
+  @@map("ar_customer_invoices")
+}
+
+model CustomerInvoiceItem {
+  id                String          @id @default(uuid())
+  customerInvoiceId String          @map("customer_invoice_id")
+  customerInvoice   CustomerInvoice @relation(fields: [customerInvoiceId], references: [id], onDelete: Cascade)
+  description       String
+  quantity          Decimal         @default(1)
+  unitPrice         Decimal         @map("unit_price")
+  amount            Decimal
+
+  productId String?  @map("product_id")
+  product   Product? @relation(fields: [productId], references: [id])
+
+  @@map("ar_customer_invoice_items")
+}
+
+model CustomerPayment {
+  id                String              @id @default(uuid())
+  paymentNumber     String              @unique @map("payment_number")
+  customerInvoiceId String              @map("customer_invoice_id")
+  customerInvoice   CustomerInvoice     @relation(fields: [customerInvoiceId], references: [id])
+  amount            Decimal
+  paymentDate       DateTime            @map("payment_date")
+  paymentMethod     PaymentMethod       @map("payment_method")
+  referenceNumber   String?             @map("reference_number")
+  notes             String?
+  status            PaymentRecordStatus @default(POSTED)
+
+  bankAccountId String  @map("bank_account_id")
+  bankAccount   Account @relation("ArPaymentBankAccount", fields: [bankAccountId], references: [id])
+
+  journalEntryId String?       @unique @map("journal_entry_id")
+  journalEntry   JournalEntry? @relation(fields: [journalEntryId], references: [id])
+
+  createdById String   @map("created_by_id")
+  createdBy   User     @relation("ArPaymentCreatedBy", fields: [createdById], references: [id])
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  reversedById String?   @map("reversed_by_id")
+  reversedBy   User?     @relation("ArPaymentReversedBy", fields: [reversedById], references: [id])
+  reversedAt   DateTime? @map("reversed_at")
+
+  @@map("ar_customer_payments")
+}
+
+// ─── Payroll Management Module ───────────────────────────
+// Built on top of the General Ledger module: payroll approval and
+// payment both post through ledger.service.ts's postAccountingEntry()/
+// reverseJournalEntryInTx() — never gl_* tables directly. Control
+// accounts (Salary Expense, Salary Payable, ...) are resolved from the
+// same AccountMapping table AP/AR already use.
+
+enum SalaryComponentCategory {
+  ALLOWANCE
+  DEDUCTION
+}
+
+enum SalaryComponentCalcType {
+  FIXED
+  PERCENT_OF_BASIC
+}
+
+enum PayrollPeriodStatus {
+  DRAFT
+  CALCULATED
+  APPROVED
+  PAID
+  CANCELLED
+}
+
+enum BonusType {
+  PERFORMANCE
+  FESTIVAL
+  ANNUAL
+  COMMISSION
+  OTHER
+}
+
+enum PayrollApprovalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum DeductionType {
+  LOAN
+  ADVANCE
+  INSURANCE
+  OTHER
+}
+
+enum PayrollLineCategory {
+  BASIC
+  ALLOWANCE
+  BONUS
+  DEDUCTION
+  TAX
+  UNPAID_LEAVE
+}
+
+// Configurable catalog of allowance/deduction *types* — not hard-coded.
+model SalaryComponent {
+  id        String                   @id @default(uuid())
+  name      String                   @unique
+  category  SalaryComponentCategory
+  calcType  SalaryComponentCalcType  @default(FIXED)
+  isTaxable Boolean                  @default(true) // relevant for ALLOWANCE components
+  isActive  Boolean                  @default(true) @map("is_active")
+  createdAt DateTime                 @default(now()) @map("created_at")
+  updatedAt DateTime                 @updatedAt @map("updated_at")
+
+  values EmployeeSalaryComponentValue[]
+
+  @@map("payroll_salary_components")
+}
+
+// A versioned, effective-dated salary assignment for one employee.
+// Creating a new one never edits an old one — payroll always resolves
+// "the version effective as of the period" so historical payroll is stable.
+model EmployeeSalary {
+  id            String   @id @default(uuid())
+  employeeId    String   @map("employee_id")
+  employee      Employee @relation(fields: [employeeId], references: [id])
+  basicSalary   Decimal  @map("basic_salary")
+  currency      String   @default("BDT")
+  effectiveFrom DateTime @map("effective_from")
+  notes         String?
+  createdById   String   @map("created_by_id")
+  createdBy     User     @relation("PayrollSalaryCreatedBy", fields: [createdById], references: [id])
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  components EmployeeSalaryComponentValue[]
+
+  @@index([employeeId, effectiveFrom])
+  @@map("payroll_employee_salaries")
+}
+
+model EmployeeSalaryComponentValue {
+  id                String  @id @default(uuid())
+  employeeSalaryId  String  @map("employee_salary_id")
+  employeeSalary    EmployeeSalary  @relation(fields: [employeeSalaryId], references: [id], onDelete: Cascade)
+  salaryComponentId String  @map("salary_component_id")
+  salaryComponent   SalaryComponent @relation(fields: [salaryComponentId], references: [id])
+  amount            Decimal
+
+  @@unique([employeeSalaryId, salaryComponentId])
+  @@map("payroll_employee_salary_component_values")
+}
+
+// Configurable progressive tax slabs — swap/add rules without code changes.
+model TaxRule {
+  id              String    @id @default(uuid())
+  name            String
+  region          String?   // null = default/national rule; set = applies only to employees in that region
+  exemptionAmount Decimal   @default(0) @map("exemption_amount")
+  isActive        Boolean   @default(true) @map("is_active")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  slabs   TaxSlab[]
+  periods PayrollPeriod[]
+
+  @@map("payroll_tax_rules")
+}
+
+model TaxSlab {
+  id          String   @id @default(uuid())
+  taxRuleId   String   @map("tax_rule_id")
+  taxRule     TaxRule  @relation(fields: [taxRuleId], references: [id], onDelete: Cascade)
+  minAmount   Decimal  @map("min_amount")
+  maxAmount   Decimal? @map("max_amount") // null = no upper bound
+  ratePercent Decimal  @map("rate_percent")
+  sortOrder   Int      @default(0) @map("sort_order")
+
+  @@map("payroll_tax_slabs")
+}
+
+model PayrollPeriod {
+  id          String              @id @default(uuid())
+  name        String
+  startDate   DateTime            @map("start_date")
+  endDate     DateTime            @map("end_date")
+  payDate     DateTime            @map("pay_date")
+  workingDays Int                 @map("working_days")
+  status      PayrollPeriodStatus @default(DRAFT)
+
+  taxRuleId String?  @map("tax_rule_id")
+  taxRule   TaxRule? @relation(fields: [taxRuleId], references: [id])
+
+  createdById String   @map("created_by_id")
+  createdBy   User     @relation("PayrollPeriodCreatedBy", fields: [createdById], references: [id])
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  calculatedAt DateTime? @map("calculated_at")
+
+  approvedById String?   @map("approved_by_id")
+  approvedBy   User?     @relation("PayrollPeriodApprovedBy", fields: [approvedById], references: [id])
+  approvedAt   DateTime? @map("approved_at")
+
+  journalEntryId String?       @unique @map("journal_entry_id")
+  journalEntry   JournalEntry? @relation(fields: [journalEntryId], references: [id])
+
+  records  PayrollRecord[]
+  bonuses  PayrollBonus[]
+  deductions PayrollDeduction[]
+  payment  PayrollPayment?
+
+  @@index([status])
+  @@map("payroll_periods")
+}
+
+// One immutable-once-approved snapshot row per employee per period.
+model PayrollRecord {
+  id             String   @id @default(uuid())
+  payrollPeriodId String  @map("payroll_period_id")
+  payrollPeriod  PayrollPeriod @relation(fields: [payrollPeriodId], references: [id])
+  employeeId     String   @map("employee_id")
+  employee       Employee @relation(fields: [employeeId], references: [id])
+
+  departmentSnapshot Department @map("department_snapshot")
+  positionSnapshot   String     @map("position_snapshot")
+
+  basicSalary          Decimal @map("basic_salary")
+  allowancesTotal       Decimal @map("allowances_total")
+  bonusTotal            Decimal @map("bonus_total")
+  grossEarnings         Decimal @map("gross_earnings")
+  taxableIncome         Decimal @map("taxable_income")
+  taxAmount             Decimal @map("tax_amount")
+  unpaidLeaveDeduction  Decimal @map("unpaid_leave_deduction")
+  otherDeductionsTotal  Decimal @map("other_deductions_total")
+  totalDeductions       Decimal @map("total_deductions")
+  netSalary             Decimal @map("net_salary")
+
+  workingDays     Int @map("working_days")
+  unpaidLeaveDays Int @default(0) @map("unpaid_leave_days")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  lines PayrollRecordLine[]
+
+  @@unique([payrollPeriodId, employeeId])
+  @@map("payroll_records")
+}
+
+model PayrollRecordLine {
+  id              String               @id @default(uuid())
+  payrollRecordId String               @map("payroll_record_id")
+  payrollRecord   PayrollRecord        @relation(fields: [payrollRecordId], references: [id], onDelete: Cascade)
+  category        PayrollLineCategory
+  name            String
+  amount          Decimal
+
+  @@map("payroll_record_lines")
+}
+
+model PayrollBonus {
+  id              String        @id @default(uuid())
+  employeeId      String        @map("employee_id")
+  employee        Employee      @relation(fields: [employeeId], references: [id])
+  payrollPeriodId String        @map("payroll_period_id")
+  payrollPeriod   PayrollPeriod @relation(fields: [payrollPeriodId], references: [id])
+  bonusType       BonusType     @map("bonus_type")
+  amount          Decimal
+  description     String?
+  status          PayrollApprovalStatus @default(PENDING)
+
+  createdById String   @map("created_by_id")
+  createdBy   User     @relation("PayrollBonusCreatedBy", fields: [createdById], references: [id])
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  approvedById String?   @map("approved_by_id")
+  approvedBy   User?     @relation("PayrollBonusApprovedBy", fields: [approvedById], references: [id])
+  approvedAt   DateTime? @map("approved_at")
+
+  @@unique([employeeId, payrollPeriodId, bonusType])
+  @@map("payroll_bonuses")
+}
+
+model PayrollDeduction {
+  id              String        @id @default(uuid())
+  employeeId      String        @map("employee_id")
+  employee        Employee      @relation(fields: [employeeId], references: [id])
+  payrollPeriodId String        @map("payroll_period_id")
+  payrollPeriod   PayrollPeriod @relation(fields: [payrollPeriodId], references: [id])
+  deductionType   DeductionType @map("deduction_type")
+  amount          Decimal
+  description     String?
+  status          PayrollApprovalStatus @default(PENDING)
+
+  createdById String   @map("created_by_id")
+  createdBy   User     @relation("PayrollDeductionCreatedBy", fields: [createdById], references: [id])
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  approvedById String?   @map("approved_by_id")
+  approvedBy   User?     @relation("PayrollDeductionApprovedBy", fields: [approvedById], references: [id])
+  approvedAt   DateTime? @map("approved_at")
+
+  @@unique([employeeId, payrollPeriodId, deductionType])
+  @@map("payroll_deductions")
+}
+
+model PayrollPayment {
+  id              String              @id @default(uuid())
+  payrollPeriodId String              @unique @map("payroll_period_id")
+  payrollPeriod   PayrollPeriod       @relation(fields: [payrollPeriodId], references: [id])
+  amount          Decimal
+  paymentDate     DateTime            @map("payment_date")
+  paymentMethod   PaymentMethod       @map("payment_method")
+  referenceNumber String?             @map("reference_number")
+  status          PaymentRecordStatus @default(POSTED)
+
+  bankAccountId String  @map("bank_account_id")
+  bankAccount   Account @relation("PayrollPaymentBankAccount", fields: [bankAccountId], references: [id])
+
+  journalEntryId String?       @unique @map("journal_entry_id")
+  journalEntry   JournalEntry? @relation(fields: [journalEntryId], references: [id])
+
+  createdById String   @map("created_by_id")
+  createdBy   User     @relation("PayrollPaymentCreatedBy", fields: [createdById], references: [id])
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  reversedById String?   @map("reversed_by_id")
+  reversedBy   User?     @relation("PayrollPaymentReversedBy", fields: [reversedById], references: [id])
+  reversedAt   DateTime? @map("reversed_at")
+
+  @@map("payroll_payments")
+}
+
+// ─── Budgeting & Forecasting Module ──────────────────────
+// Reads "actual" figures straight from posted/locked General Ledger
+// journal lines (see budgetAnalysis.service.ts) — it never creates GL
+// entries of its own and never stores a separate copy of actuals.
+//
+// Important known limitation (see final summary): gl_journal_lines has
+// no department dimension anywhere in this codebase (Account, JournalLine,
+// and JournalEntry are all department-agnostic), so "actual" for a budget
+// line is always the account's company-wide GL activity for the period —
+// never filtered by the line's department. BudgetLine.department is an
+// organizational/reporting grouping only.
+
+enum BudgetStatus {
+  DRAFT
+  PENDING_APPROVAL
+  APPROVED
+  ACTIVE
+  CLOSED
+  CANCELLED
+}
+
+model Budget {
+  id          String       @id @default(uuid())
+  name        String
+  fiscalYear  Int          @map("fiscal_year")
+  startDate   DateTime     @map("start_date")
+  endDate     DateTime     @map("end_date")
+  description String?
+  status      BudgetStatus @default(DRAFT)
+
+  // When utilization crosses this percent of the annual budget, an active
+  // budget's owner is alerted (see notification.service.ts's periodic sweep).
+  alertThresholdPercent Decimal @default(90) @map("alert_threshold_percent")
+
+  // Revisions never overwrite an approved/active budget's historical values —
+  // they're a new Budget row pointing back at the one they revise.
+  version       Int     @default(1)
+  revisedFromId String? @map("revised_from_id")
+  revisedFrom   Budget? @relation("BudgetRevision", fields: [revisedFromId], references: [id])
+  revisions     Budget[] @relation("BudgetRevision")
+
+  createdById String   @map("created_by_id")
+  createdBy   User     @relation("BudgetCreatedBy", fields: [createdById], references: [id])
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  submittedById String?   @map("submitted_by_id")
+  submittedBy   User?     @relation("BudgetSubmittedBy", fields: [submittedById], references: [id])
+  submittedAt   DateTime? @map("submitted_at")
+
+  approvedById String?   @map("approved_by_id")
+  approvedBy   User?     @relation("BudgetApprovedBy", fields: [approvedById], references: [id])
+  approvedAt   DateTime? @map("approved_at")
+
+  activatedById String?   @map("activated_by_id")
+  activatedBy   User?     @relation("BudgetActivatedBy", fields: [activatedById], references: [id])
+  activatedAt   DateTime? @map("activated_at")
+
+  closedAt    DateTime? @map("closed_at")
+  cancelledAt DateTime? @map("cancelled_at")
+
+  lines BudgetLine[]
+
+  @@index([fiscalYear])
+  @@index([status])
+  @@map("budgets")
+}
+
+model BudgetLine {
+  id           String      @id @default(uuid())
+  budgetId     String      @map("budget_id")
+  budget       Budget      @relation(fields: [budgetId], references: [id], onDelete: Cascade)
+  department   Department?
+  accountId    String      @map("account_id")
+  account      Account     @relation(fields: [accountId], references: [id])
+  annualAmount Decimal     @map("annual_amount")
+  notes        String?
+
+  months BudgetLineMonth[]
+
+  @@unique([budgetId, department, accountId])
+  @@index([budgetId])
+  @@index([accountId])
+  @@index([department])
+  @@map("budget_lines")
+}
+
+model BudgetLineMonth {
+  id           String     @id @default(uuid())
+  budgetLineId String     @map("budget_line_id")
+  budgetLine   BudgetLine @relation(fields: [budgetLineId], references: [id], onDelete: Cascade)
+  month        Int
+  amount       Decimal
+
+  @@unique([budgetLineId, month])
+  @@map("budget_line_months")
+}
+
+// ─── Compliance & Tax Engine Module ──────────────────────
+// VAT/GST configuration, calculation, periods, and returns.
+// Reads/writes AP/AR only through their existing services (an
+// optional taxCodeId on VendorBill/CustomerInvoice), and posts through
+// ledger.service.ts's postAccountingEntry()/reverseJournalEntryInTx() —
+// never gl_* tables directly. Control accounts (Output VAT Payable,
+// Input VAT Recoverable) are resolved from the same AccountMapping
+// table AP/AR/Payroll already use.
+//
+// This is intentionally separate from Payroll's TaxRule/TaxSlab, which
+// models employee income-tax withholding — a different tax domain from
+// transaction-level VAT/GST on sales and purchases.
+
+enum TaxType {
+  VAT
+  GST
+  SALES_TAX
+  SERVICE_TAX
+  OTHER
+}
+
+// STANDARD/REDUCED apply the configured rate; ZERO_RATED forces a 0%
+// rate but the transaction is still taxable/reportable; EXEMPT is
+// entirely outside the tax system. Kept distinct per spec section 5/21.
+enum TaxCategory {
+  STANDARD
+  REDUCED
+  ZERO_RATED
+  EXEMPT
+  OUT_OF_SCOPE
+}
+
+enum TaxDirection {
+  INPUT
+  OUTPUT
+}
+
+enum TaxSourceType {
+  AR_INVOICE
+  AP_BILL
+}
+
+enum TaxTransactionStatus {
+  ACTIVE
+  REVERSED
+}
+
+enum TaxPeriodStatus {
+  OPEN
+  REVIEW
+  FINALIZED
+  FILED
+  CLOSED
+}
+
+// The configurable tax definition ("VAT", code "VAT15", region, category).
+// Rates are versioned separately (TaxRate) so history is never overwritten.
+model TaxCode {
+  id       String      @id @default(uuid())
+  name     String
+  code     String      @unique
+  type     TaxType
+  region   String?
+  category TaxCategory @default(STANDARD)
+  isActive Boolean     @default(true) @map("is_active")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  rates            TaxRate[]
+  transactions     TaxTransaction[]
+  vendorBills      VendorBill[]      @relation("ApBillTaxCode")
+  customerInvoices CustomerInvoice[] @relation("ArInvoiceTaxCode")
+
+  @@map("compliance_tax_codes")
+}
+
+// Effective-dated rate history for a TaxCode — never overwritten, only appended.
+model TaxRate {
+  id            String    @id @default(uuid())
+  taxCodeId     String    @map("tax_code_id")
+  taxCode       TaxCode   @relation(fields: [taxCodeId], references: [id])
+  ratePercent   Decimal   @map("rate_percent")
+  effectiveFrom DateTime  @map("effective_from")
+  effectiveTo   DateTime? @map("effective_to")
+  isActive      Boolean   @default(true) @map("is_active")
+  createdAt     DateTime  @default(now()) @map("created_at")
+
+  transactions TaxTransaction[]
+
+  @@index([taxCodeId, effectiveFrom])
+  @@map("compliance_tax_rates")
+}
+
+model TaxPeriod {
+  id        String          @id @default(uuid())
+  name      String
+  startDate DateTime        @map("start_date")
+  endDate   DateTime        @map("end_date")
+  dueDate   DateTime        @map("due_date")
+  status    TaxPeriodStatus @default(OPEN)
+
+  // Snapshot totals, populated by "calculate" and locked once FINALIZED —
+  // later-posted transactions never silently change a finalized period.
+  outputTax    Decimal?  @map("output_tax")
+  inputTax     Decimal?  @map("input_tax")
+  adjustments  Decimal   @default(0)
+  netPayable   Decimal?  @map("net_payable")
+  calculatedAt DateTime? @map("calculated_at")
+
+  createdById String   @map("created_by_id")
+  createdBy   User     @relation("TaxPeriodCreatedBy", fields: [createdById], references: [id])
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  reviewedById String?   @map("reviewed_by_id")
+  reviewedBy   User?     @relation("TaxPeriodReviewedBy", fields: [reviewedById], references: [id])
+  reviewedAt   DateTime? @map("reviewed_at")
+
+  finalizedById String?   @map("finalized_by_id")
+  finalizedBy   User?     @relation("TaxPeriodFinalizedBy", fields: [finalizedById], references: [id])
+  finalizedAt   DateTime? @map("finalized_at")
+
+  filedById String?   @map("filed_by_id")
+  filedBy   User?     @relation("TaxPeriodFiledBy", fields: [filedById], references: [id])
+  filedAt   DateTime? @map("filed_at")
+
+  closedAt DateTime? @map("closed_at")
+
+  transactions TaxTransaction[]
+  payment      TaxPayment?
+
+  @@index([status])
+  @@map("compliance_tax_periods")
+}
+
+// The centralized, traceable tax ledger — one row per tax event. References
+// its source (an AR invoice or AP bill) instead of duplicating invoice data.
+model TaxTransaction {
+  id              String                @id @default(uuid())
+  sourceType      TaxSourceType         @map("source_type")
+  sourceId        String                @map("source_id")
+  transactionDate DateTime              @map("transaction_date")
+  direction       TaxDirection
+
+  taxCodeId String  @map("tax_code_id")
+  taxCode   TaxCode @relation(fields: [taxCodeId], references: [id])
+  taxRateId String? @map("tax_rate_id")
+  taxRate   TaxRate? @relation(fields: [taxRateId], references: [id])
+
+  // Snapshotted at creation time — never recalculated from current config.
+  category      TaxCategory
+  ratePercent   Decimal     @map("rate_percent")
+  taxableAmount Decimal     @map("taxable_amount")
+  taxAmount     Decimal     @map("tax_amount")
+
+  status TaxTransactionStatus @default(ACTIVE)
+
+  taxPeriodId String?    @map("tax_period_id")
+  taxPeriod   TaxPeriod? @relation(fields: [taxPeriodId], references: [id])
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([sourceType, sourceId])
+  @@index([transactionDate])
+  @@index([taxPeriodId])
+  @@index([direction])
+  @@map("compliance_tax_transactions")
+}
+
+model TaxPayment {
+  id              String              @id @default(uuid())
+  taxPeriodId     String              @unique @map("tax_period_id")
+  taxPeriod       TaxPeriod           @relation(fields: [taxPeriodId], references: [id])
+  amount          Decimal
+  paymentDate     DateTime            @map("payment_date")
+  paymentMethod   PaymentMethod       @map("payment_method")
+  referenceNumber String?             @map("reference_number")
+  status          PaymentRecordStatus @default(POSTED)
+
+  bankAccountId String  @map("bank_account_id")
+  bankAccount   Account @relation("TaxPaymentBankAccount", fields: [bankAccountId], references: [id])
+
+  journalEntryId String?       @unique @map("journal_entry_id")
+  journalEntry   JournalEntry? @relation(fields: [journalEntryId], references: [id])
+
+  createdById String   @map("created_by_id")
+  createdBy   User     @relation("TaxPaymentCreatedBy", fields: [createdById], references: [id])
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  reversedById String?   @map("reversed_by_id")
+  reversedBy   User?     @relation("TaxPaymentReversedBy", fields: [reversedById], references: [id])
+  reversedAt   DateTime? @map("reversed_at")
+
+  @@map("compliance_tax_payments")
+}
+
+// ─── Fiscal Periods (General Ledger) ─────────────────────
+// Optional, additive period model: a date range with an OPEN/CLOSED status.
+// A closed period blocks new/posted journal entries dated inside it unless
+// the actor holds general_ledger.override_closed_period. Periods with no
+// coverage for a given date are treated as open (backward compatible with
+// the pre-existing GL, which had no period concept at all).
+
+enum FiscalPeriodStatus {
+  OPEN
+  CLOSED
+}
+
+model FiscalPeriod {
+  id        String             @id @default(uuid())
+  name      String
+  startDate DateTime           @map("start_date")
+  endDate   DateTime           @map("end_date")
+  status    FiscalPeriodStatus @default(OPEN)
+
+  createdById String   @map("created_by_id")
+  createdBy   User     @relation("FiscalPeriodCreatedBy", fields: [createdById], references: [id])
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  closedById String?   @map("closed_by_id")
+  closedBy   User?     @relation("FiscalPeriodClosedBy", fields: [closedById], references: [id])
+  closedAt   DateTime? @map("closed_at")
+
+  reopenedById String?   @map("reopened_by_id")
+  reopenedBy   User?     @relation("FiscalPeriodReopenedBy", fields: [reopenedById], references: [id])
+  reopenedAt   DateTime? @map("reopened_at")
+
+  @@index([startDate, endDate])
+  @@map("gl_fiscal_periods")
+}
+
+// ─── Notifications (shared across modules) ───────────────
+// Generic in-app notification, reused by AR's overdue-payment reminders and
+// Budgeting's threshold alerts rather than building a bespoke mechanism per
+// module. A background sweep (see server/src/lib/notificationSweep.ts)
+// periodically generates these; the client polls/reads them via
+// /api/notifications and renders them in the header bell.
+
+enum NotificationType {
+  AR_OVERDUE_REMINDER
+  BUDGET_THRESHOLD_ALERT
+  GENERAL
+}
+
+model Notification {
+  id          String           @id @default(uuid())
+  userId      String           @map("user_id")
+  user        User             @relation("NotificationRecipient", fields: [userId], references: [id])
+  type        NotificationType
+  title       String
+  message     String
+  entityType  String?          @map("entity_type")
+  entityId    String?          @map("entity_id")
+  isRead      Boolean          @default(false) @map("is_read")
+  createdAt   DateTime         @default(now()) @map("created_at")
+
+  @@index([userId, isRead])
+  @@index([type, entityType, entityId])
+  @@map("notifications")
+}
