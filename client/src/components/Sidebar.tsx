@@ -77,9 +77,12 @@ export default function Sidebar({
     { name: 'Offboarding', path: '/offboarding', icon: UserMinus, show: hasPermission('offboarding', 'view') || hasPermission('offboarding', 'request') },
     { name: 'Attendance', path: '/attendance', icon: Clock, show: true },
     { name: 'Audit Logs', path: '/audit-logs', icon: ScrollText, show: hasPermission('audit', 'view') },
-    // ─── Inventory & Operations ─────────────────────────────
+   // ─── Inventory & Operations ─────────────────────────────
     { name: 'Inventory', path: '/inventory', icon: Package, show: true },
+    { name: 'Inventory Items', path: '/inventory/items', icon: Package, show: true },
     { name: 'Warehouses', path: '/inventory/warehouses', icon: Building2, show: true },
+    { name: 'Stock Transfers', path: '/inventory/transfers', icon: RotateCcw, show: true },
+    { name: 'Stock Take', path: '/inventory/stock-take', icon: CheckSquare, show: true },
     { name: 'Calendar', path: '/calendar', icon: CalendarRange, show: true },
     { name: 'Reports', path: '/reports', icon: CheckSquare, show: true },
     { name: 'Messages', path: '/messages', icon: CheckSquare, show: true },

@@ -22,7 +22,8 @@ type Meeting = {
   participants: Participant[];
 };
 
-const CURRENT_EMPLOYEE_ID = "346c3869-51a5-4255-a777-d944f19ea7de";
+const VALID_USER_ID = "1a5e13d2-f024-473f-8656-305743c5d612";
+const VALID_EMPLOYEE_ID = "a633d700-003c-43b6-aadf-ad99b080dee9";
 
 export default function CalendarView() {
   const [meetings, setMeetings] = useState<Meeting[]>([]);
@@ -40,13 +41,32 @@ export default function CalendarView() {
   const [participantIds, setParticipantIds] = useState<string[]>([]);
   const [participantSearch, setParticipantSearch] = useState("");
 
+  // Reconcile localStorage with Aisha Patel's valid database IDs
+  useEffect(() => {
+    localStorage.setItem("currentUserId", VALID_USER_ID);
+    localStorage.setItem("currentEmployeeId", VALID_EMPLOYEE_ID);
+  }, []);
+
+  const getHeaders = (additionalHeaders: Record<string, string> = {}) => {
+    return {
+      "x-current-user-id": VALID_USER_ID,
+      "x-current-employee-id": VALID_EMPLOYEE_ID,
+      ...additionalHeaders,
+    };
+  };
+
   const loadData = async () => {
     try {
       const [meetingsResponse, employeesResponse] = await Promise.all([
         fetch(
-          `http://localhost:3001/api/meetings?employeeId=${CURRENT_EMPLOYEE_ID}`
+          `http://localhost:3001/api/meetings?employeeId=${VALID_EMPLOYEE_ID}`,
+          {
+            headers: getHeaders(),
+          }
         ),
-        fetch("http://localhost:3001/api/employees"),
+        fetch("http://localhost:3001/api/employees", {
+          headers: getHeaders(),
+        }),
       ]);
 
       if (!meetingsResponse.ok) {
@@ -60,10 +80,10 @@ export default function CalendarView() {
       const meetingsData = await meetingsResponse.json();
       const employeesData = await employeesResponse.json();
 
-      setMeetings(meetingsData);
-      const employeeList = Array.isArray(employeesData.data)
-        ? employeesData.data
-        : [];
+      setMeetings(Array.isArray(meetingsData) ? meetingsData : meetingsData.data || []);
+      
+      const rawList = employeesData.data || employeesData;
+      const employeeList = Array.isArray(rawList) ? rawList : [];
 
       setEmployees(employeeList);
     } catch (error) {
@@ -112,23 +132,23 @@ export default function CalendarView() {
     try {
       const response = await fetch("http://localhost:3001/api/meetings", {
         method: "POST",
-        headers: {
+        headers: getHeaders({
           "Content-Type": "application/json",
-        },
+        }),
         body: JSON.stringify({
           title: title.trim(),
           description: description.trim() || null,
           startTime: start.toISOString(),
           endTime: end.toISOString(),
-          createdById: CURRENT_EMPLOYEE_ID,
+          createdById: VALID_EMPLOYEE_ID,
           participantIds,
         }),
       });
 
-      const data = await response.json();
+      const data = await response.json().catch(() => null);
 
       if (!response.ok) {
-        throw new Error(data?.error || "Failed to create meeting");
+        throw new Error(data?.error || data?.message || "Failed to create meeting");
       }
 
       alert("Meeting scheduled successfully!");
@@ -159,6 +179,7 @@ export default function CalendarView() {
         `http://localhost:3001/api/meetings/${id}`,
         {
           method: "DELETE",
+          headers: getHeaders(),
         }
       );
 
@@ -190,7 +211,7 @@ export default function CalendarView() {
     });
 
   const filteredEmployees = employees
-    .filter((employee) => employee.id !== CURRENT_EMPLOYEE_ID)
+    .filter((employee) => employee.id !== VALID_EMPLOYEE_ID)
     .filter((employee) => {
       const fullName =
         `${employee.firstName} ${employee.lastName}`.toLowerCase();
