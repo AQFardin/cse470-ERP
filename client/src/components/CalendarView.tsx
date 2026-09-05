@@ -22,8 +22,7 @@ type Meeting = {
   participants: Participant[];
 };
 
-const CURRENT_EMPLOYEE_ID =
-  "346c3869-51a5-4255-a777-d944f19ea7de";
+const CURRENT_EMPLOYEE_ID = "346c3869-51a5-4255-a777-d944f19ea7de";
 
 export default function CalendarView() {
   const [meetings, setMeetings] = useState<Meeting[]>([]);
@@ -34,23 +33,21 @@ export default function CalendarView() {
   const [description, setDescription] = useState("");
 
   const [startDate, setStartDate] = useState("");
-  const [startClock, setStartClock] = useState("");
-
+  const [startTimeVal, setStartTimeVal] = useState("");
   const [endDate, setEndDate] = useState("");
-  const [endClock, setEndClock] = useState("");
+  const [endTimeVal, setEndTimeVal] = useState("");
 
   const [participantIds, setParticipantIds] = useState<string[]>([]);
   const [participantSearch, setParticipantSearch] = useState("");
 
   const loadData = async () => {
     try {
-      const [meetingsResponse, employeesResponse] =
-        await Promise.all([
-          fetch(
-            `http://localhost:3001/api/meetings?employeeId=${CURRENT_EMPLOYEE_ID}`
-          ),
-          fetch("http://localhost:3001/api/employees"),
-        ]);
+      const [meetingsResponse, employeesResponse] = await Promise.all([
+        fetch(
+          `http://localhost:3001/api/meetings?employeeId=${CURRENT_EMPLOYEE_ID}`
+        ),
+        fetch("http://localhost:3001/api/employees"),
+      ]);
 
       if (!meetingsResponse.ok) {
         throw new Error("Failed to load meetings");
@@ -64,7 +61,11 @@ export default function CalendarView() {
       const employeesData = await employeesResponse.json();
 
       setMeetings(meetingsData);
-      setEmployees(employeesData.data || []);
+      const employeeList = Array.isArray(employeesData.data)
+        ? employeesData.data
+        : [];
+
+      setEmployees(employeeList);
     } catch (error) {
       console.error("Calendar load error:", error);
     } finally {
@@ -90,30 +91,15 @@ export default function CalendarView() {
       return;
     }
 
-    if (
-      !startDate ||
-      !startClock ||
-      !endDate ||
-      !endClock
-    ) {
-      alert(
-        "Please select the start and end date and time."
-      );
+    if (!startDate || !startTimeVal || !endDate || !endTimeVal) {
+      alert("Please select both date and time for start and end.");
       return;
     }
 
-    const start = new Date(
-      `${startDate}T${startClock}`
-    );
+    const start = new Date(`${startDate}T${startTimeVal}`);
+    const end = new Date(`${endDate}T${endTimeVal}`);
 
-    const end = new Date(
-      `${endDate}T${endClock}`
-    );
-
-    if (
-      Number.isNaN(start.getTime()) ||
-      Number.isNaN(end.getTime())
-    ) {
+    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
       alert("Please enter valid dates and times.");
       return;
     }
@@ -124,53 +110,43 @@ export default function CalendarView() {
     }
 
     try {
-      const response = await fetch(
-        "http://localhost:3001/api/meetings",
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            title: title.trim(),
-            description: description.trim() || null,
-            startTime: start.toISOString(),
-            endTime: end.toISOString(),
-            createdById: CURRENT_EMPLOYEE_ID,
-            participantIds,
-          }),
-        }
-      );
+      const response = await fetch("http://localhost:3001/api/meetings", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          title: title.trim(),
+          description: description.trim() || null,
+          startTime: start.toISOString(),
+          endTime: end.toISOString(),
+          createdById: CURRENT_EMPLOYEE_ID,
+          participantIds,
+        }),
+      });
 
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(
-          data?.error || "Failed to create meeting"
-        );
+        throw new Error(data?.error || "Failed to create meeting");
       }
 
       alert("Meeting scheduled successfully!");
 
       setTitle("");
       setDescription("");
-
       setStartDate("");
-      setStartClock("");
+      setStartTimeVal("");
       setEndDate("");
-      setEndClock("");
-
+      setEndTimeVal("");
       setParticipantIds([]);
       setParticipantSearch("");
 
       await loadData();
     } catch (error) {
       console.error("Create meeting error:", error);
-
       alert(
-        error instanceof Error
-          ? error.message
-          : "Could not create meeting."
+        error instanceof Error ? error.message : "Could not create meeting."
       );
     }
   };
@@ -193,11 +169,8 @@ export default function CalendarView() {
       await loadData();
     } catch (error) {
       console.error("Delete meeting error:", error);
-
       alert(
-        error instanceof Error
-          ? error.message
-          : "Could not delete meeting."
+        error instanceof Error ? error.message : "Could not delete meeting."
       );
     }
   };
@@ -217,81 +190,54 @@ export default function CalendarView() {
     });
 
   const filteredEmployees = employees
-    .filter(
-      (employee) =>
-        employee.id !== CURRENT_EMPLOYEE_ID
-    )
+    .filter((employee) => employee.id !== CURRENT_EMPLOYEE_ID)
     .filter((employee) => {
       const fullName =
         `${employee.firstName} ${employee.lastName}`.toLowerCase();
-
-      return fullName.includes(
-        participantSearch.toLowerCase()
-      );
+      return fullName.includes(participantSearch.toLowerCase());
     });
 
   if (loading) {
-    return (
-      <div className="p-8 text-gray-600">
-        Loading calendar...
-      </div>
-    );
+    return <div className="p-8 text-gray-600">Loading calendar...</div>;
   }
 
   return (
     <div className="p-6 md:p-8 max-w-6xl mx-auto">
       <div className="mb-6">
-        <h1 className="text-3xl font-bold text-gray-900">
-          Shared Calendar
-        </h1>
-
+        <h1 className="text-3xl font-bold text-gray-900">Shared Calendar</h1>
         <p className="text-gray-500 mt-1">
           Schedule and manage meetings with employees.
         </p>
       </div>
 
-      {/* Create Meeting */}
       <div className="bg-white border rounded-xl p-6 mb-8 shadow-sm">
-        <h2 className="text-xl font-semibold mb-5">
-          Schedule Meeting
-        </h2>
+        <h2 className="text-xl font-semibold mb-5">Schedule Meeting</h2>
 
         <div className="grid md:grid-cols-2 gap-4">
-
-          {/* Meeting Title */}
           <div>
             <label className="block text-sm font-medium mb-1">
               Meeting Title
             </label>
-
             <input
               value={title}
-              onChange={(e) =>
-                setTitle(e.target.value)
-              }
+              onChange={(e) => setTitle(e.target.value)}
               placeholder="Team meeting"
               className="w-full border rounded-lg px-3 py-2"
             />
           </div>
 
-          {/* Participants */}
           <div>
             <label className="block text-sm font-medium mb-1">
               Participants
             </label>
-
-            {/* Search */}
             <input
               type="text"
               value={participantSearch}
-              onChange={(e) =>
-                setParticipantSearch(e.target.value)
-              }
+              onChange={(e) => setParticipantSearch(e.target.value)}
               placeholder="Search employees..."
               className="w-full border rounded-lg px-3 py-2 mb-2"
             />
 
-            {/* Employee list */}
             <div className="border rounded-lg max-h-40 overflow-y-auto">
               {filteredEmployees.length === 0 ? (
                 <div className="p-3 text-sm text-gray-500">
@@ -299,9 +245,7 @@ export default function CalendarView() {
                 </div>
               ) : (
                 filteredEmployees.map((employee) => {
-                  const selected =
-                    participantIds.includes(employee.id);
-
+                  const selected = participantIds.includes(employee.id);
                   return (
                     <label
                       key={employee.id}
@@ -310,17 +254,11 @@ export default function CalendarView() {
                       <input
                         type="checkbox"
                         checked={selected}
-                        onChange={() =>
-                          toggleParticipant(
-                            employee.id
-                          )
-                        }
+                        onChange={() => toggleParticipant(employee.id)}
                         className="h-4 w-4"
                       />
-
                       <span className="text-sm">
-                        {employee.firstName}{" "}
-                        {employee.lastName}
+                        {employee.firstName} {employee.lastName}
                       </span>
                     </label>
                   );
@@ -328,97 +266,92 @@ export default function CalendarView() {
               )}
             </div>
 
-            {/* Selected count */}
             <div className="mt-2 text-sm text-gray-500">
-              {participantIds.length === 0 ? (
-                "No participants selected"
-              ) : (
-                <>
-                  {participantIds.length} participant
-                  {participantIds.length !== 1
-                    ? "s"
-                    : ""}{" "}
-                  selected
-                </>
-              )}
+              {participantIds.length === 0
+                ? "No participants selected"
+                : `${participantIds.length} participant${
+                    participantIds.length !== 1 ? "s" : ""
+                  } selected`}
             </div>
           </div>
 
-          {/* Start Date */}
+          {/* Start Date & Time */}
           <div>
             <label className="block text-sm font-medium mb-1">
-              Start Date
+              Start Date & Time
             </label>
-
-            <input
-              type="date"
-              value={startDate}
-              onChange={(e) =>
-                setStartDate(e.target.value)
-              }
-              className="w-full border rounded-lg px-3 py-2"
-            />
+            <div className="flex gap-2">
+              <input
+                type="date"
+                value={startDate}
+                onChange={(e) => setStartDate(e.target.value)}
+                className="w-1/2 border rounded-lg px-3 py-2 bg-white"
+              />
+              <select
+                value={startTimeVal}
+                onChange={(e) => setStartTimeVal(e.target.value)}
+                className="w-1/2 border rounded-lg px-3 py-2 bg-white"
+              >
+                <option value="">Select Time</option>
+                {Array.from({ length: 48 }).map((_, i) => {
+                  const h = Math.floor(i / 2);
+                  const m = i % 2 === 0 ? "00" : "30";
+                  const hourStr = h.toString().padStart(2, "0");
+                  const timeVal = `${hourStr}:${m}`;
+                  const displayHour = h % 12 === 0 ? 12 : h % 12;
+                  const ampm = h < 12 ? "AM" : "PM";
+                  return (
+                    <option key={timeVal} value={timeVal}>
+                      {displayHour}:{m} {ampm}
+                    </option>
+                  );
+                })}
+              </select>
+            </div>
           </div>
 
-          {/* Start Time */}
+          {/* End Date & Time */}
           <div>
             <label className="block text-sm font-medium mb-1">
-              Start Time
+              End Date & Time
             </label>
-
-            <input
-              type="time"
-              value={startClock}
-              onChange={(e) =>
-                setStartClock(e.target.value)
-              }
-              className="w-full border rounded-lg px-3 py-2"
-            />
+            <div className="flex gap-2">
+              <input
+                type="date"
+                value={endDate}
+                onChange={(e) => setEndDate(e.target.value)}
+                className="w-1/2 border rounded-lg px-3 py-2 bg-white"
+              />
+              <select
+                value={endTimeVal}
+                onChange={(e) => setEndTimeVal(e.target.value)}
+                className="w-1/2 border rounded-lg px-3 py-2 bg-white"
+              >
+                <option value="">Select Time</option>
+                {Array.from({ length: 48 }).map((_, i) => {
+                  const h = Math.floor(i / 2);
+                  const m = i % 2 === 0 ? "00" : "30";
+                  const hourStr = h.toString().padStart(2, "0");
+                  const timeVal = `${hourStr}:${m}`;
+                  const displayHour = h % 12 === 0 ? 12 : h % 12;
+                  const ampm = h < 12 ? "AM" : "PM";
+                  return (
+                    <option key={timeVal} value={timeVal}>
+                      {displayHour}:{m} {ampm}
+                    </option>
+                  );
+                })}
+              </select>
+            </div>
           </div>
 
-          {/* End Date */}
-          <div>
-            <label className="block text-sm font-medium mb-1">
-              End Date
-            </label>
-
-            <input
-              type="date"
-              value={endDate}
-              onChange={(e) =>
-                setEndDate(e.target.value)
-              }
-              className="w-full border rounded-lg px-3 py-2"
-            />
-          </div>
-
-          {/* End Time */}
-          <div>
-            <label className="block text-sm font-medium mb-1">
-              End Time
-            </label>
-
-            <input
-              type="time"
-              value={endClock}
-              onChange={(e) =>
-                setEndClock(e.target.value)
-              }
-              className="w-full border rounded-lg px-3 py-2"
-            />
-          </div>
-
-          {/* Description */}
           <div className="md:col-span-2">
             <label className="block text-sm font-medium mb-1">
               Description
             </label>
-
             <textarea
               value={description}
-              onChange={(e) =>
-                setDescription(e.target.value)
-              }
+              onChange={(e) => setDescription(e.target.value)}
               placeholder="Meeting details..."
               rows={3}
               className="w-full border rounded-lg px-3 py-2"
@@ -434,11 +367,8 @@ export default function CalendarView() {
         </button>
       </div>
 
-      {/* Meetings */}
       <div>
-        <h2 className="text-xl font-semibold mb-4">
-          Upcoming Meetings
-        </h2>
+        <h2 className="text-xl font-semibold mb-4">Upcoming Meetings</h2>
 
         {meetings.length === 0 ? (
           <div className="bg-white border rounded-xl p-8 text-center text-gray-500">
@@ -458,19 +388,12 @@ export default function CalendarView() {
                     </h3>
 
                     <p className="text-sm text-indigo-600 mt-1">
-                      {formatDate(
-                        meeting.startTime
-                      )}
+                      {formatDate(meeting.startTime)}
                     </p>
 
                     <p className="text-sm text-gray-600">
-                      {formatTime(
-                        meeting.startTime
-                      )}{" "}
-                      –{" "}
-                      {formatTime(
-                        meeting.endTime
-                      )}
+                      {formatTime(meeting.startTime)} –{" "}
+                      {formatTime(meeting.endTime)}
                     </p>
 
                     {meeting.description && (
@@ -482,19 +405,12 @@ export default function CalendarView() {
                     <p className="text-sm text-gray-500 mt-3">
                       Created by{" "}
                       <span className="font-medium">
-                        {
-                          meeting.createdBy
-                            .firstName
-                        }{" "}
-                        {
-                          meeting.createdBy
-                            .lastName
-                        }
+                        {meeting.createdBy.firstName}{" "}
+                        {meeting.createdBy.lastName}
                       </span>
                     </p>
 
-                    {meeting.participants.length >
-                      0 && (
+                    {meeting.participants.length > 0 && (
                       <p className="text-sm text-gray-500 mt-1">
                         Participants:{" "}
                         {meeting.participants
@@ -508,9 +424,7 @@ export default function CalendarView() {
                   </div>
 
                   <button
-                    onClick={() =>
-                      deleteMeeting(meeting.id)
-                    }
+                    onClick={() => deleteMeeting(meeting.id)}
                     className="px-3 py-1.5 text-sm border rounded-lg text-red-600 hover:bg-red-50"
                   >
                     Delete
